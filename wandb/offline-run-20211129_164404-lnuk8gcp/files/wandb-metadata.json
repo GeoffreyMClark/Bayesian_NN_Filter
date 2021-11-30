@@ -1,0 +1,24 @@
+{
+    "os": "Linux-5.4.0-90-generic-x86_64-with-debian-buster-sid",
+    "python": "3.7.9",
+    "heartbeatAt": "2021-11-29T23:44:08.946956",
+    "startedAt": "2021-11-29T23:44:04.260574",
+    "docker": null,
+    "gpu": "Quadro M2000M",
+    "gpu_count": 1,
+    "cpu_count": 8,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/geoffrey/Research/git/Bayesian_NN_Filter/cassie_examples/ppo_continuous.py",
+    "codePath": "cassie_examples/ppo_continuous.py",
+    "git": {
+        "remote": "git@github.com:GeoffreyMClark/Bayesian_NN_Filter.git",
+        "commit": "91bd87ce77e9a2ee59c7e418d75e95ca50b3af5e"
+    },
+    "email": null,
+    "root": "/home/geoffrey/Research/git/Bayesian_NN_Filter",
+    "host": "geoffrey-PC",
+    "username": "geoffrey",
+    "executable": "/home/geoffrey/anaconda3/envs/mujoco_sim/bin/python"
+}

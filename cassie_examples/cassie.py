@@ -17,7 +17,7 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         contact_cost_weight=5e-4,
         healthy_reward=1.0,
         terminate_when_unhealthy=True,
-        healthy_z_range=(0.2, 1.5),
+        healthy_z_range=(0.5, 1.5),
         contact_force_range=(-1.0, 1.0),
         reset_noise_scale=0.1,
         exclude_current_positions_from_observation=True,
@@ -75,6 +75,8 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     @property
     def done(self):
         done = not self.is_healthy if self._terminate_when_unhealthy else False
+        print(self.is_healthy)
+        print(self._terminate_when_unhealthy)
         return done
 
     def step(self, action):
