@@ -21,7 +21,7 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         healthy_z_range=(0.5, 1.1),
         contact_force_range=(-1.0, 1.0),
         reset_noise_scale=0.1,
-        exclude_current_positions_from_observation=True,
+        exclude_current_IMU_from_observation=False,
     ):
         utils.EzPickle.__init__(**locals())
 
@@ -38,8 +38,8 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self._reset_noise_scale = reset_noise_scale
 
-        self._exclude_current_positions_from_observation = (
-            exclude_current_positions_from_observation
+        self.exclude_current_IMU_from_observation = (
+            exclude_current_IMU_from_observation
         )
 
         mujoco_env.MujocoEnv.__init__(self, xml_file, 5)
@@ -111,15 +111,18 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return observation, reward, done, info
 
     def _get_obs(self):
-        position = self.sim.data.qpos.flat.copy()
-        velocity = self.sim.data.qvel.flat.copy()
+        # position = self.sim.data.qpos.flat.copy()
+        # velocity = self.sim.data.qvel.flat.copy()
         # contact_force = self.contact_forces.flat.copy()
+        sensordata = self.sim.data.sensordata.flat.copy()
 
-        if self._exclude_current_positions_from_observation:
-            position = position[2:]
+        if self.exclude_current_IMU_from_observation:
+            sensors = sensordata[0:16]
+        else:
+            sensors = sensordata
 
         # observations = np.concatenate((position, velocity, contact_force))
-        observations = np.concatenate((position, velocity))
+        observations = sensors
 
         return observations
 

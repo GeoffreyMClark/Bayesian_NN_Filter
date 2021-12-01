@@ -161,7 +161,7 @@ class Agent:
             state = self.env.reset()
 
             while not done:
-                self.env.render()
+                # self.env.render()
                 log_old_policy, action = self.actor.get_action(state)
 
                 next_state, reward, done, info = self.env.step(action)
