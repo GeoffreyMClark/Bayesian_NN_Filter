@@ -2,6 +2,7 @@
 import tensorflow as tf
 from tensorflow import random
 from tensorflow.keras.layers import Input, Dense, Lambda
+from cassie import CassieEnv
 
 import gym
 import argparse
@@ -15,13 +16,13 @@ tf.keras.backend.set_floatx('float64')
 # tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--gamma', type=float, default=0.995)
-parser.add_argument('--update_interval', type=int, default=16)
-parser.add_argument('--actor_lr', type=float, default=0.05)
-parser.add_argument('--critic_lr', type=float, default=0.1)
-parser.add_argument('--clip_ratio', type=float, default=0.5)
+parser.add_argument('--gamma', type=float, default=0.99)
+parser.add_argument('--update_interval', type=int, default=64)
+parser.add_argument('--actor_lr', type=float, default=0.00005)
+parser.add_argument('--critic_lr', type=float, default=0.0001)
+parser.add_argument('--clip_ratio', type=float, default=0.1)
 parser.add_argument('--lmbda', type=float, default=0.95)
-parser.add_argument('--epochs', type=int, default=1)
+parser.add_argument('--epochs', type=int, default=2)
 
 args = parser.parse_args()
 
@@ -53,8 +54,8 @@ class Actor:
 
     def create_model(self):
         state_input = Input((self.state_dim,))
-        dense_1 = Dense(32, activation='relu')(state_input)
-        dense_2 = Dense(32, activation='relu')(dense_1)
+        dense_1 = Dense(128, activation='relu')(state_input)
+        dense_2 = Dense(128, activation='relu')(dense_1)
         out_mu = Dense(self.action_dim, activation='tanh')(dense_2)
         mu_output = Lambda(lambda x: x * self.action_bound)(out_mu)
         std_output = Dense(self.action_dim, activation='softplus')(dense_2)
@@ -89,8 +90,8 @@ class Critic:
     def create_model(self):
         model = tf.keras.Sequential([
             Input((self.state_dim,)),
-            Dense(32, activation='relu'),
-            Dense(32, activation='relu'),
+            Dense(128, activation='relu'),
+            Dense(128, activation='relu'),
             # Dense(16, activation='relu'),
             Dense(1, activation='linear')
         ])
@@ -147,7 +148,7 @@ class Agent:
     def list_to_batch(self, list):
         return np.asarray(list).reshape(len(list), len(list[0][0]))
 
-    def train(self, max_episodes=1000):
+    def train(self, max_episodes=100000):
         for ep in range(max_episodes):
             time0=perf_counter()
             state_batch = []
@@ -160,15 +161,19 @@ class Agent:
             state = self.env.reset()
 
             while not done:
-                # self.env.render()
+                self.env.render()
                 log_old_policy, action = self.actor.get_action(state)
 
-                next_state, reward, done, _ = self.env.step(action)
+                next_state, reward, done, info = self.env.step(action)
+                # print('Cost Motion - ',info['cost_motion'])
+                # print('Cost Ctrl   - ',info['cost_ctrl'])
+                # print('Reward stand- ',info['reward_stand'])
+                # print('')
 
                 state = state.reshape(1,-1)
                 action = action.reshape(1,-1)
                 next_state = next_state.reshape(1,-1)
-                reward = reward.reshape(1,-1)
+                reward = np.asarray([reward]).reshape(1,-1)
                 log_old_policy = np.reshape(log_old_policy, [1, 1])
 
                 state_batch.append(state)
@@ -205,8 +210,11 @@ class Agent:
 
 
 def main():
-    env_name = 'Pendulum-v1'
-    env = gym.make(env_name)
+    # env_name = 'CartPole-v1'
+    # env_name = 'Pendulum-v1'
+    # env_name = 'MountainCarContinuous-v0'
+    # env = gym.make(env_name)
+    env = CassieEnv()
     agent = Agent(env)
     agent.train()
 
@@ -215,7 +223,7 @@ if __name__ == "__main__":
     main()
 
 # TO DO:
-# 4. experiment with different hyperparams
+# 4. change observations to encoder and imu sensors
 
 
 # Before optimization

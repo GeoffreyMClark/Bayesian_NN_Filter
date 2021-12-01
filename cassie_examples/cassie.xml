@@ -221,10 +221,10 @@
     </body>
 
     <!-- Add any other moving bodies after the Cassie definition -->
-    <body name='box' pos='2 0 0.2'>
+    <!-- <body name='box' pos='2 0 0.2'>
       <freejoint/>
       <geom type='box' size='0.1 0.1 0.1' mass='3' class='obstacle'/>
-    </body>
+    </body> -->
 
   </worldbody>
 
@@ -235,17 +235,31 @@
     <connect body1='right-achilles-rod' body2='right-heel-spring' anchor='0.5012 0 0'/>
   </equality>
 
-  <actuator>
+  <!-- <actuator> -->
     <!-- User parameter is the maximum no-load motor RPM -->
-    <motor name='left-hip-roll'  joint='left-hip-roll'  gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/>
-    <motor name='left-hip-yaw'   joint='left-hip-yaw'   gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/>
-    <motor name='left-hip-pitch' joint='left-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/>
-    <motor name='left-knee'      joint='left-knee'      gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/>
+    <!-- <motor name='left-hip-roll'  joint='left-hip-roll'  gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/> -->
+    <!-- <motor name='left-hip-yaw'   joint='left-hip-yaw'   gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/> -->
+    <!-- <motor name='left-hip-pitch' joint='left-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/> -->
+    <!-- <motor name='left-knee'      joint='left-knee'      gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/> -->
+    <!-- <motor name='left-foot'      joint='left-foot'      gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'   user='5500'/> -->
+    <!-- <motor name='right-hip-roll'  joint='right-hip-roll'  gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/> -->
+    <!-- <motor name='right-hip-yaw'   joint='right-hip-yaw'   gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/> -->
+    <!-- <motor name='right-hip-pitch' joint='right-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/> -->
+    <!-- <motor name='right-knee'      joint='right-knee'      gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/> -->
+    <!-- <motor name='right-foot'      joint='right-foot'      gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'   user='5500'/> -->
+  <!-- </actuator> -->
+
+    <actuator>
+    <!-- User parameter is the maximum no-load motor RPM -->
+    <motor name='left-hip-roll'  joint='left-hip-roll'  gear='25' ctrllimited='true' ctrlrange='-1.0 1.0'   user='2900'/>
+    <motor name='left-hip-yaw'   joint='left-hip-yaw'   gear='25' ctrllimited='true' ctrlrange='-1.0 1.0'   user='2900'/>
+    <motor name='left-hip-pitch' joint='left-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-1.0 1.0' user='1300'/>
+    <motor name='left-knee'      joint='left-knee'      gear='16' ctrllimited='true' ctrlrange='-1.0 1.0' user='1300'/>
     <motor name='left-foot'      joint='left-foot'      gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'   user='5500'/>
-    <motor name='right-hip-roll'  joint='right-hip-roll'  gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/>
-    <motor name='right-hip-yaw'   joint='right-hip-yaw'   gear='25' ctrllimited='true' ctrlrange='-4.5 4.5'   user='2900'/>
-    <motor name='right-hip-pitch' joint='right-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/>
-    <motor name='right-knee'      joint='right-knee'      gear='16' ctrllimited='true' ctrlrange='-12.2 12.2' user='1300'/>
+    <motor name='right-hip-roll'  joint='right-hip-roll'  gear='25' ctrllimited='true' ctrlrange='-1.0 1.0'   user='2900'/>
+    <motor name='right-hip-yaw'   joint='right-hip-yaw'   gear='25' ctrllimited='true' ctrlrange='-1.0 1.0'   user='2900'/>
+    <motor name='right-hip-pitch' joint='right-hip-pitch' gear='16' ctrllimited='true' ctrlrange='-1.0 1.0' user='1300'/>
+    <motor name='right-knee'      joint='right-knee'      gear='16' ctrllimited='true' ctrlrange='-1.0 1.0' user='1300'/>
     <motor name='right-foot'      joint='right-foot'      gear='50' ctrllimited='true' ctrlrange='-0.9 0.9'   user='5500'/>
   </actuator>
 

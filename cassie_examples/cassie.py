@@ -2,6 +2,7 @@ import numpy as np
 from gym import utils
 from gym.envs.mujoco import mujoco_env
 from gym.envs.registration import register
+import math
 
 
 DEFAULT_CAMERA_CONFIG = {
@@ -15,9 +16,9 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         xml_file="/home/geoffrey/Research/git/Bayesian_NN_Filter/cassie_examples/cassie.xml",
         ctrl_cost_weight=0.5,
         contact_cost_weight=5e-4,
-        healthy_reward=1.0,
+        healthy_reward=10.0,
         terminate_when_unhealthy=True,
-        healthy_z_range=(0.5, 1.5),
+        healthy_z_range=(0.5, 1.1),
         contact_force_range=(-1.0, 1.0),
         reset_noise_scale=0.1,
         exclude_current_positions_from_observation=True,
@@ -60,9 +61,7 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
     @property
     def contact_cost(self):
-        contact_cost = self._contact_cost_weight * np.sum(
-            np.square(self.contact_forces)
-        )
+        contact_cost = self._contact_cost_weight * np.sum(np.square(self.contact_forces))
         return contact_cost
 
     @property
@@ -75,8 +74,6 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     @property
     def done(self):
         done = not self.is_healthy if self._terminate_when_unhealthy else False
-        print(self.is_healthy)
-        print(self._terminate_when_unhealthy)
         return done
 
     def step(self, action):
@@ -86,43 +83,43 @@ class CassieEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         xy_velocity = (xy_position_after - xy_position_before) / self.dt
         x_velocity, y_velocity = xy_velocity
-
-        ctrl_cost = self.control_cost(action)
-        contact_cost = self.contact_cost
-
-        forward_reward = x_velocity
-        healthy_reward = self.healthy_reward
-
-        rewards = forward_reward + healthy_reward
-        costs = ctrl_cost + contact_cost
-
-        reward = rewards - costs
+        
         done = self.done
+        
+
+        forward_cost = np.abs(x_velocity)*10
+        sideways_cost = np.abs(y_velocity)*10
+        ctrl_cost = self.control_cost(action)*1000
+        # contact_cost = self.contact_cost
+        healthy_reward = self.healthy_reward
+        reward = healthy_reward - forward_cost - sideways_cost - ctrl_cost
+        if done:
+            reward -= 5000
+
         observation = self._get_obs()
         info = {
-            "reward_forward": forward_reward,
-            "reward_ctrl": -ctrl_cost,
-            "reward_contact": -contact_cost,
-            "reward_survive": healthy_reward,
+            "cost_motion": forward_cost+sideways_cost,
+            "cost_ctrl": ctrl_cost,
+            "reward_stand": healthy_reward,
             "x_position": xy_position_after[0],
             "y_position": xy_position_after[1],
             "distance_from_origin": np.linalg.norm(xy_position_after, ord=2),
             "x_velocity": x_velocity,
             "y_velocity": y_velocity,
-            "forward_reward": forward_reward,
+            # "forward_reward": forward_reward,
         }
-
         return observation, reward, done, info
 
     def _get_obs(self):
         position = self.sim.data.qpos.flat.copy()
         velocity = self.sim.data.qvel.flat.copy()
-        contact_force = self.contact_forces.flat.copy()
+        # contact_force = self.contact_forces.flat.copy()
 
         if self._exclude_current_positions_from_observation:
             position = position[2:]
 
-        observations = np.concatenate((position, velocity, contact_force))
+        # observations = np.concatenate((position, velocity, contact_force))
+        observations = np.concatenate((position, velocity))
 
         return observations
 
