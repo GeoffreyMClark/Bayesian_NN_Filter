@@ -39,10 +39,6 @@ from cassie import CassieEnv
 # print(py_env.observation_spec())
 
 
-
-# https://www.tensorflow.org/agents/tutorials/1_dqn_tutorial
-
-
 num_iterations = 20000 # @param {type:"integer"}
 
 initial_collect_steps = 100  # @param {type:"integer"}
@@ -56,44 +52,44 @@ log_interval = 200  # @param {type:"integer"}
 num_eval_episodes = 10  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 
+fc_layer_params = (100, 50) #NN layer sizes
 
-
-env_name = 'CartPole-v0'
 # env_name = 'Pendulum-v1'
+env_name = 'CartPole-v0'
 env = suite_gym.load(env_name)
-
-env.reset()
-# PIL.Image.fromarray(env.render())
-
-print('Observation Spec:')
-print(env.time_step_spec().observation)
-
-print('Reward Spec:')
-print(env.time_step_spec().reward)
-
-print('Action Spec:')
-print(env.action_spec())
-
-time_step = env.reset()
-print('Time step:')
-print(time_step)
-
-action = np.array(1, dtype=np.int32)
-
-next_time_step = env.step(action)
-print('Next time step:')
-print(next_time_step)
-
-
 train_py_env = suite_gym.load(env_name)
 eval_py_env = suite_gym.load(env_name)
-
 train_env = tf_py_environment.TFPyEnvironment(train_py_env)
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
+# env.reset()
+# PIL.Image.fromarray(env.render())
+
+# print('Observation Spec:')
+# print(env.time_step_spec().observation)
+
+# print('Reward Spec:')
+# print(env.time_step_spec().reward)
+
+# print('Action Spec:')
+# print(env.action_spec())
+
+time_step = env.reset()
+# print('Time step:')
+# print(time_step)
+
+action = np.array(1, dtype=np.int32)
+# print('Action:')
+# print(action)
+
+next_time_step = env.step(action)
+# print('Next time step:')
+# print(next_time_step)
 
 
 
-fc_layer_params = (100, 50)
+
+
+
 action_tensor_spec = tensor_spec.from_spec(env.action_spec())
 num_actions = action_tensor_spec.maximum - action_tensor_spec.minimum + 1
 
@@ -121,31 +117,19 @@ q_net = sequential.Sequential(dense_layers + [q_values_layer])
 
 
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-train_step_counter = tf.Variable(0)
-
 agent = dqn_agent.DqnAgent(
     train_env.time_step_spec(),
     train_env.action_spec(),
     q_network=q_net,
-    optimizer=optimizer,
+    optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
     td_errors_loss_fn=common.element_wise_squared_loss,
-    train_step_counter=train_step_counter)
+    train_step_counter=tf.Variable(0))
 agent.initialize()
 
 
-
-eval_policy = agent.policy
-collect_policy = agent.collect_policy
-
-random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(),train_env.action_spec())
-
-
 example_environment = tf_py_environment.TFPyEnvironment(suite_gym.load('CartPole-v0'))
-
 time_step = example_environment.reset()
-
-random_policy.action(time_step)
+random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(),train_env.action_spec())
 
 
 
@@ -165,16 +149,12 @@ def compute_avg_return(environment, policy, num_episodes=10):
 # See also the metrics module for standard implementations of different metrics.
 # https://github.com/tensorflow/agents/tree/master/tf_agents/metrics
 
-compute_avg_return(eval_env, random_policy, num_eval_episodes)
-
 
 
 
 table_name = 'uniform_table'
-replay_buffer_signature = tensor_spec.from_spec(
-      agent.collect_data_spec)
-replay_buffer_signature = tensor_spec.add_outer_dim(
-    replay_buffer_signature)
+replay_buffer_signature = tensor_spec.from_spec(agent.collect_data_spec)
+replay_buffer_signature = tensor_spec.add_outer_dim(replay_buffer_signature)
 
 table = reverb.Table(
     table_name,
@@ -193,15 +173,11 @@ replay_buffer = reverb_replay_buffer.ReverbReplayBuffer(
     local_server=reverb_server)
 
 rb_observer = reverb_utils.ReverbAddTrajectoryObserver(
-  replay_buffer.py_client,
-  table_name,
-  sequence_length=2)
+    replay_buffer.py_client,
+    table_name,
+    sequence_length=2)
 
 
-
-agent.collect_data_spec
-
-agent.collect_data_spec._fields
 
 
 
@@ -224,25 +200,17 @@ dataset = replay_buffer.as_dataset(
     sample_batch_size=batch_size,
     num_steps=2).prefetch(3)
 
-dataset
+
 
 iterator = iter(dataset)
-print(iterator)
-
 # For the curious:
 # Uncomment to see what the dataset iterator is feeding to the agent.
 # Compare this representation of replay data 
 # to the collection of individual trajectories shown earlier.
-
 # iterator.next()
 
 
 
-
-# try:
-#   %%time
-# except:
-#   pass
 
 # (Optional) Optimize by wrapping some of the code in a graph using TF function.
 agent.train = common.function(agent.train)
@@ -290,7 +258,7 @@ plt.plot(iterations, returns)
 plt.ylabel('Average Return')
 plt.xlabel('Iterations')
 plt.ylim(top=250)
-
+plt.show()
 
 
 
