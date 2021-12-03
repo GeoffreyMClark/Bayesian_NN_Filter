@@ -7,6 +7,8 @@ import numpy as np
 import PIL.Image
 import reverb
 import zlib
+import tempfile
+import os
 
 import tensorflow as tf
 from tf_agents.agents.dqn import dqn_agent
@@ -126,6 +128,7 @@ def compute_avg_return(environment, policy, num_episodes=10):
 def collect_data(environment, policy, num_episodes=1):
     step_count = int(0)
     img=[]; action=[]; state=[]
+    example_path = os.path.join(tempfile.gettempdir(), "example.tfrecords")
     with tf.io.TFRecordWriter(example_path) as file_writer:
         for _ in range(num_episodes):
             time_step = environment.reset()
