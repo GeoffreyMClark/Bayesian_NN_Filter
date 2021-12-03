@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import PIL.Image
 import reverb
+import zlib
 
 import tensorflow as tf
 from tf_agents.agents.dqn import dqn_agent
@@ -34,6 +35,7 @@ batch_size = 64  # @param {type:"integer"}
 learning_rate = 1e-3  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
 num_eval_episodes = 10  # @param {type:"integer"}
+num_data_collection_episodes = 10  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (100, 50) #NN layer sizes
 
@@ -112,14 +114,33 @@ def compute_avg_return(environment, policy, num_episodes=10):
     time_step = environment.reset()
     episode_return = 0.0
     while not time_step.is_last():
-      action_step = policy.action(time_step)
-      time_step = environment.step(action_step.action)
-      episode_return += time_step.reward
+        action_step = policy.action(time_step)
+        time_step = environment.step(action_step.action)
+        episode_return += time_step.reward
     total_return += episode_return
   avg_return = total_return / num_episodes
   return avg_return.numpy()[0]
 # See also the metrics module for standard implementations of different metrics.
 # https://github.com/tensorflow/agents/tree/master/tf_agents/metrics
+
+def collect_data(environment, policy, num_episodes=1):
+    step_count = int(0)
+    img=[]; action=[]; state=[]
+    with tf.io.TFRecordWriter(example_path) as file_writer:
+        for _ in range(num_episodes):
+            time_step = environment.reset()
+            step_count = step_count + 1
+            while not time_step.is_last():
+                action_step = policy.action(time_step)
+                # img.append(zlib.compress(env.render(mode='rgb_array').copy(order='C')))
+                img.append(env.render(mode='rgb_array'))
+                action.append(action_step.action.numpy())
+                state.append(time_step.observation.numpy())
+                time_step = environment.step(action_step.action)
+        img_arr = np.asarray(img)
+        action_arr = np.asarray(action)
+        state_arr = np.asarray(state)
+    return img_arr, action_arr, state_arr
 
 
 def create_replay(agent):
@@ -229,34 +250,9 @@ if __name__=='__main__':
             print('step = {0}: Average Return = {1}'.format(step, avg_return))
             returns.append(avg_return)
 
+    img, action, state = collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)
-
     plot_data(iterations, returns)
-
-
-
-
-
-    
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     pass
