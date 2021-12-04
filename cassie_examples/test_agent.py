@@ -128,8 +128,10 @@ def compute_avg_return(environment, policy, num_episodes=10):
 def collect_data(environment, policy, num_episodes=1):
     step_count = int(0)
     img=[]; action=[]; state=[]
-    example_path = os.path.join(tempfile.gettempdir(), "example.tfrecords")
-    with tf.io.TFRecordWriter(example_path) as file_writer:
+    # example_path = os.path.join(tempfile.gettempdir(), "example.tfrecords")
+    # options = tf.io.TFRecordOptions(tf.io.TFRecordCompressionType.GZIP)
+    # with tf.io.TFRecordWriter("example.tfrecords", options=options) as file_writer:
+    with tf.io.TFRecordWriter("example.tfrecords") as file_writer:
         for _ in range(num_episodes):
             time_step = environment.reset()
             step_count = step_count + 1
@@ -142,7 +144,16 @@ def collect_data(environment, policy, num_episodes=1):
                 time_step = environment.step(action_step.action)
         img_arr = np.asarray(img)
         action_arr = np.asarray(action)
-        state_arr = np.asarray(state)
+        state_arr = np.asarray(state).reshape(-1,4)
+        record_bytes = tf.train.Example(features=tf.train.Features(feature={
+            "action": tf.train.Feature(float_list=tf.train.FloatList(value=action_arr)),
+            "state1": tf.train.Feature(float_list=tf.train.FloatList(value=state_arr[:,0])),
+            "state2": tf.train.Feature(float_list=tf.train.FloatList(value=state_arr[:,1])),
+            "state3": tf.train.Feature(float_list=tf.train.FloatList(value=state_arr[:,2])),
+            "state4": tf.train.Feature(float_list=tf.train.FloatList(value=state_arr[:,3])),
+        })).SerializeToString()
+        file_writer.write(record_bytes)
+
     return img_arr, action_arr, state_arr
 
 
@@ -222,6 +233,7 @@ if __name__=='__main__':
     # Evaluate the agent's policy once before training.
     avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
     returns = [avg_return]
+    img, action, state = collect_data(eval_env, agent.policy, num_data_collection_episodes)
 
     # Reset the environment.
     time_step = train_py_env.reset()
