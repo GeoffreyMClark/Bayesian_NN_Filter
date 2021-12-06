@@ -146,21 +146,18 @@ def serialize_array(array):
   array = tf.io.serialize_tensor(array)
   return array
 
-def parse_images(img, action, state, next_state):
+def parse_images(prev_state, state, img):
     img_arr = np.asarray(img, dtype=np.uint8)
-    action_arr = np.asarray(action, dtype=np.float64)
-    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,4)
-    next_state_arr = np.asarray(next_state, dtype=np.float64).reshape(-1,4)
+    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,5)
+    prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
         "img_height" : _int64_feature(img_arr.shape[-3]),
         "img_width" : _int64_feature(img_arr.shape[-2]),
         "img_depth" : _int64_feature(img_arr.shape[-1]),
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
-        "action_size" : _int64_feature(action_arr.shape[-1]),
-        "action": _bytes_feature(serialize_array(action_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
         "state": _bytes_feature(serialize_array(state_arr)),
-        "next_state": _bytes_feature(serialize_array(next_state_arr)),
+        "prev_state": _bytes_feature(serialize_array(prev_state_arr)),
     }
     return data
 
@@ -174,20 +171,37 @@ def collect_data(environment, policy, num_episodes=1):
         current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+1, num_episodes, 'pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
 
+        # while not time_step.is_last():
+        #     action_step = policy.action(time_step)
+        #     img=env.render(mode='rgb_array')
+        #     action=action_step.action.numpy()
+        #     state=time_step.observation.numpy()
+        #     time_step = environment.step(action_step.action)
+        #     next_state=time_step.observation.numpy()
+        #     # with tf.io.TFRecordWriter(current_shard_name) as file_writer:
+        #     data = parse_images(img, action, state, next_state)
+        #     record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+        #     file_writer.write(record_bytes)
+
+        prev_obs = time_step.observation.numpy()
+        prev_action_step = policy.action(time_step)
+
         while not time_step.is_last():
+            prev_action=prev_action_step.action.numpy()
+
+            time_step = environment.step(prev_action_step.action)
+            obs=time_step.observation.numpy()
             action_step = policy.action(time_step)
-            # img.append(env.render(mode='rgb_array'))
-            # action.append(action_step.action.numpy())
-            # state.append(time_step.observation.numpy())
-            # time_step = environment.step(action_step.action)
-            # next_state.append(time_step.observation.numpy())
-            img=env.render(mode='rgb_array')
             action=action_step.action.numpy()
-            state=time_step.observation.numpy()
-            time_step = environment.step(action_step.action)
-            next_state=time_step.observation.numpy()
-            # with tf.io.TFRecordWriter(current_shard_name) as file_writer:
-            data = parse_images(img, action, state, next_state)
+            img=env.render(mode='rgb_array')
+
+            prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
+            state = np.concatenate((obs, action.reshape(1,1)), axis=1)
+            data = parse_images(prev_state, state, img)
+
+            prev_obs = obs
+            prev_action_step = action_step
+
             record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
             file_writer.write(record_bytes)
         file_writer.close()
