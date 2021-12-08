@@ -26,28 +26,35 @@ from tf_agents.trajectories import trajectory
 from tf_agents.specs import tensor_spec
 from tf_agents.utils import common
 
+from cartpole_noise import CartPoleEnvNoise
+
 # tf dataset info from:
 # https://towardsdatascience.com/a-practical-guide-to-tfrecords-584536bc786c
 
 
 num_iterations = 20000 # @param {type:"integer"}
 initial_collect_steps = 100  # @param {type:"integer"}
-collect_steps_per_iteration =   1# @param {type:"integer"}
+collect_steps_per_iteration = 1 # @param {type:"integer"}
 replay_buffer_max_length = 100000  # @param {type:"integer"}
 batch_size = 64  # @param {type:"integer"}
 learning_rate = 1e-3  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
 num_eval_episodes = 10  # @param {type:"integer"}
-num_data_collection_episodes = 5  # @param {type:"integer"}
+num_data_collection_episodes = 100  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
-fc_layer_params = (100, 50) #NN layer sizes
+fc_layer_params = (128, 64) #NN layer sizes
 
-data_dir = 'data/inv_pendulum/'
+data_dir = 'data/inv_pendulum/test2/'
 
-env_name = 'CartPole-v0'
-env = suite_gym.load(env_name)
-train_py_env = suite_gym.load(env_name)
-eval_py_env = suite_gym.load(env_name)
+gym_env = CartPoleEnvNoise()
+env = suite_gym.wrap_env(gym_env)
+train_py_env = suite_gym.wrap_env(gym_env)
+eval_py_env = suite_gym.wrap_env(gym_env)
+
+# env_name = 'CartPole-v0'
+# env = suite_gym.load(env_name)
+# train_py_env = suite_gym.load(env_name)
+# eval_py_env = suite_gym.load(env_name)
 train_env = tf_py_environment.TFPyEnvironment(train_py_env)
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
@@ -148,7 +155,7 @@ def serialize_array(array):
 
 def parse_images(prev_state, state, img):
     img_arr = np.asarray(img, dtype=np.uint8)
-    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,5)
+    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,10)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
         "img_height" : _int64_feature(img_arr.shape[-3]),
@@ -157,32 +164,18 @@ def parse_images(prev_state, state, img):
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
         "state": _bytes_feature(serialize_array(state_arr)),
+        "prev_state_size" : _int64_feature(prev_state_arr.shape[-1]),
         "prev_state": _bytes_feature(serialize_array(prev_state_arr)),
     }
     return data
 
 
 def collect_data(environment, policy, num_episodes=1):
-    step_count = int(0)
-    # img=[]; action=[]; state=[]; next_state=[]
+    zero_vec = np.zeros((1,5))
     for i in range(num_episodes):
         time_step = environment.reset()
-        step_count = step_count + 1
         current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+1, num_episodes, 'pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
-
-        # while not time_step.is_last():
-        #     action_step = policy.action(time_step)
-        #     img=env.render(mode='rgb_array')
-        #     action=action_step.action.numpy()
-        #     state=time_step.observation.numpy()
-        #     time_step = environment.step(action_step.action)
-        #     next_state=time_step.observation.numpy()
-        #     # with tf.io.TFRecordWriter(current_shard_name) as file_writer:
-        #     data = parse_images(img, action, state, next_state)
-        #     record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
-        #     file_writer.write(record_bytes)
-
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
 
@@ -196,7 +189,7 @@ def collect_data(environment, policy, num_episodes=1):
             img=env.render(mode='rgb_array')
 
             prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
-            state = np.concatenate((obs, action.reshape(1,1)), axis=1)
+            state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
             data = parse_images(prev_state, state, img)
 
             prev_obs = obs
@@ -240,7 +233,7 @@ def plot_data(iterations, returns):
     plt.plot(iterations, returns)
     plt.ylabel('Average Return')
     plt.xlabel('Iterations')
-    plt.ylim(top=250)
+    # plt.ylim(top=250)
     plt.show()
 
 
