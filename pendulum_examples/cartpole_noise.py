@@ -88,10 +88,6 @@ class CartPoleEnvNoise(gym.Env):
         self.t = 0
         self.time_threshold = 1000
 
-        if self.t == 1999:
-            self.t = 1999
-            pass
-
         self.steps_beyond_done = None
 
     def seed(self, seed=None):
@@ -104,8 +100,20 @@ class CartPoleEnvNoise(gym.Env):
 
         x, x_dot, theta, theta_dot = self.state
         force = self.force_mag if action == 1 else -self.force_mag
+        
+        force = -force if np.random.uniform(0,1) >= 0.99999 else force
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
+
+        # perturbation = np.random.uniform(0,1)
+        # if perturbation >= 0.99:
+        # #     theta_dot += self.np_random.normal(loc=0, scale=0.001)
+        #     selection = np.random.uniform(0,1)
+        #     if selection >= .5:
+        #         theta_dot+=np.random.uniform(0.1,0.5)
+        #     else:
+        #         theta_dot-=np.random.uniform(0.1,0.5)
+        
 
         # For the interested reader:
         # https://coneural.org/florian/papers/05_cart_pole.pdf
@@ -128,14 +136,10 @@ class CartPoleEnvNoise(gym.Env):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = theta + self.tau * theta_dot
 
-        perturbation = np.random.binomial(1, 0.99)
-        if perturbation == 1:
-            theta_dot += np.random.uniform(-.05, .05)
-
-        # perturbation = np.random.uniform(0,1)
-        # if perturbation >= 0.95:
-        #     theta_dot += np.random.normal(loc=0.0, scale=.00001)
-        # theta_dot += np.random.normal(loc=0.0, scale=.1)
+        # perturbation = np.random.binomial(1, 0.99)
+        # if perturbation == 1:
+        #     theta_dot += np.random.uniform(-.03, .03)
+            # theta_dot += np.random.uniform(-.5, .5)
 
         self.state = (x, x_dot, theta, theta_dot)
 
@@ -149,28 +153,46 @@ class CartPoleEnvNoise(gym.Env):
             or self.t > self.time_threshold
         )
 
-        if not done:
-            reward = 2.4-(6*np.abs(x))
-        elif self.steps_beyond_done is None:
-            # Pole just fell!
-            self.steps_beyond_done = 0
-            reward = 1.0
-        else:
-            if self.steps_beyond_done == 0:
-                logger.warn(
-                    "You are calling 'step()' even though this "
-                    "environment has already returned done = True. You "
-                    "should always call 'reset()' once you receive 'done = "
-                    "True' -- any further steps are undefined behavior."
-                )
-            self.steps_beyond_done += 1
-            reward = 0.0
+        reward = np.clip(1-np.log(x**2), -10, 100)
+
+        # if not done:
+            # reward = x**2 + (theta)**2
+        # else:
+            # reward = x**2 + (theta)**2
+        # if not done:
+        #     # reward = 1-(x**4/2)
+        #     # reward = 5-(np.abs(x*3))-(x**4)
+        #     reward = np.clip(1-np.log(x**2), -10, 20)
+        # elif self.steps_beyond_done is None:
+        #     # Pole just fell!
+        #     self.steps_beyond_done = 0
+        #     # reward = 1-(x**6/3)
+        #     # reward = 5-(np.abs(x*3))-(x**4)
+        #     reward = np.clip(1-np.log(x**2), -10, 20)
+        # else:
+        #     if self.steps_beyond_done == 0:
+        #         logger.warn(
+        #             "You are calling 'step()' even though this "
+        #             "environment has already returned done = True. You "
+        #             "should always call 'reset()' once you receive 'done = "
+        #             "True' -- any further steps are undefined behavior."
+        #         )
+        #     self.steps_beyond_done += 1
+        #     reward = 0.0
+        # if np.abs(x) >= 1.8:
+        #     reward -= 10
 
         self.t += 1
         return np.array(self.state, dtype=np.float32), reward, done, {}
 
     def reset(self):
-        self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
+        xinit = self.x_threshold/2
+        theta_init = self.theta_threshold_radians/1.2
+        pos_x = self.np_random.uniform(low=-xinit, high=xinit, size=(1,))
+        pos_v = self.np_random.uniform(low=-.05, high=.05, size=(1,))
+        theta_x = self.np_random.uniform(low=-theta_init, high=theta_init, size=(1,))
+        theta_v = self.np_random.uniform(low=-0.05, high=0.05, size=(1,))
+        self.state = np.concatenate((pos_x, pos_v, theta_x, theta_v))
         self.steps_beyond_done = None
         self.t = 0
         return np.array(self.state, dtype=np.float32)

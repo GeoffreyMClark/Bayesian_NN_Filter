@@ -20,6 +20,7 @@ from tf_agents.metrics import tf_metrics
 from tf_agents.networks import sequential
 from tf_agents.policies import py_tf_eager_policy
 from tf_agents.policies import random_tf_policy
+from tf_agents.policies import PolicySaver
 from tf_agents.replay_buffers import reverb_replay_buffer
 from tf_agents.replay_buffers import reverb_utils
 from tf_agents.trajectories import trajectory
@@ -32,19 +33,19 @@ from cartpole_noise import CartPoleEnvNoise
 # https://towardsdatascience.com/a-practical-guide-to-tfrecords-584536bc786c
 
 
-num_iterations = 20000 # @param {type:"integer"}
+num_iterations = 200000 # @param {type:"integer"}
 initial_collect_steps = 100  # @param {type:"integer"}
 collect_steps_per_iteration = 1 # @param {type:"integer"}
 replay_buffer_max_length = 100000  # @param {type:"integer"}
-batch_size = 64  # @param {type:"integer"}
-learning_rate = 1e-3  # @param {type:"number"}
+batch_size = 128  # @param {type:"integer"}
+learning_rate = 1e-4  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
-num_eval_episodes = 10  # @param {type:"integer"}
-num_data_collection_episodes = 100  # @param {type:"integer"}
+num_eval_episodes = 50  # @param {type:"integer"}
+num_data_collection_episodes = 1  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
-fc_layer_params = (128, 64) #NN layer sizes
+fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-data_dir = 'data/inv_pendulum/test2/'
+data_dir = 'data/inv_pendulum/test15/'
 
 gym_env = CartPoleEnvNoise()
 env = suite_gym.wrap_env(gym_env)
@@ -122,13 +123,15 @@ def create_agent(train_env, q_net):
 
 def compute_avg_return(environment, policy, num_episodes=10):
   total_return = 0.0
-  for _ in range(num_episodes):
+  for i in range(num_episodes):
     time_step = environment.reset()
     episode_return = 0.0
     while not time_step.is_last():
         action_step = policy.action(time_step)
         time_step = environment.step(action_step.action)
         episode_return += time_step.reward
+        # if i == 0:
+        #     environment.render()
     total_return += episode_return
   avg_return = total_return / num_episodes
   return avg_return.numpy()[0]
@@ -153,8 +156,9 @@ def serialize_array(array):
   array = tf.io.serialize_tensor(array)
   return array
 
-def parse_images(prev_state, state, img):
+def parse_images(prev_state, state, prev_img, img):
     img_arr = np.asarray(img, dtype=np.uint8)
+    prev_img_arr = np.asarray(prev_img, dtype=np.float16)
     state_arr = np.asarray(state, dtype=np.float64).reshape(-1,10)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
@@ -162,6 +166,7 @@ def parse_images(prev_state, state, img):
         "img_width" : _int64_feature(img_arr.shape[-2]),
         "img_depth" : _int64_feature(img_arr.shape[-1]),
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
+        "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
         "state": _bytes_feature(serialize_array(state_arr)),
         "prev_state_size" : _int64_feature(prev_state_arr.shape[-1]),
@@ -170,34 +175,52 @@ def parse_images(prev_state, state, img):
     return data
 
 
-def collect_data(environment, policy, num_episodes=1):
+def collect_data(environment, policy, num_episodes=1, starting_shard=1):
     zero_vec = np.zeros((1,5))
     for i in range(num_episodes):
         time_step = environment.reset()
-        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+1, num_episodes, 'pendulum')
+        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, '5pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
+        episode_return = 0
 
-        while not time_step.is_last():
-            prev_action=prev_action_step.action.numpy()
+        # while not time_step.is_last():
+        for j in range(200):
+            if not time_step.is_last():
+                prev_action=prev_action_step.action.numpy()
 
-            time_step = environment.step(prev_action_step.action)
-            obs=time_step.observation.numpy()
-            action_step = policy.action(time_step)
-            action=action_step.action.numpy()
-            img=env.render(mode='rgb_array')
+                time_step = environment.step(prev_action_step.action)
+                obs=time_step.observation.numpy()
+                action_step = policy.action(time_step)
+                action=action_step.action.numpy()
+                raw=env.render(mode='rgb_array')
+                raw = cv.pyrDown(raw[167:317,:,:])
+                gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
+                img = gray/256
+                # cv.imshow("full_img", img)
+                # cv.waitKey()
+                if j == 0:
+                    prev_img = img
 
-            prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
-            state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
-            data = parse_images(prev_state, state, img)
+                prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
+                state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
+                data = parse_images(prev_state, state, prev_img, img)
 
-            prev_obs = obs
-            prev_action_step = action_step
+                prev_obs = obs
+                prev_action_step = action_step
+                prev_img = img
 
-            record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
-            file_writer.write(record_bytes)
+                record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+                file_writer.write(record_bytes)
+
+                reward = time_step.reward
+                # print(reward)
+                episode_return += reward
+            else:
+                break
         file_writer.close()
+        print("episode return = ", episode_return)
 
 
 
@@ -277,6 +300,7 @@ if __name__=='__main__':
     # Evaluate the agent's policy once before training.
     avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
     returns = [avg_return]
+    best_return = avg_return
     # collect_data(eval_env, agent.policy, num_data_collection_episodes)
 
     # Reset the environment.
@@ -289,6 +313,10 @@ if __name__=='__main__':
         agent.collect_policy, use_tf_function=True),
         [rb_observer],
         max_steps=collect_steps_per_iteration)
+
+    eval_num=1
+
+    # collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
 
     for _ in range(num_iterations):
 
@@ -306,18 +334,29 @@ if __name__=='__main__':
 
         if step % eval_interval == 0:
             avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
+            collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
+            eval_num +=1
             print('step = {0}: Average Return = {1}'.format(step, avg_return))
             returns.append(avg_return)
+            if avg_return >= best_return:
+                best_return = avg_return
+                PolicySaver(agent.policy).save(data_dir)
 
-    collect_data(eval_env, agent.policy, num_data_collection_episodes)
+    # collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)
-    plot_data(iterations, returns)
+    # plot_data(iterations, returns)
 
 
     pass
 
 
 # TO DO
+# add batch norm
+# save model and reload in filter file
+# learn dynamics model with action
+# learn vision model with optical flow
+
+
 # 2. add optical flow image to dataset so i can calculate velocities
 # 3. add perturbations to the gym env. Probably want to use sporatic uniformly distributed perturbations centered on zero.
 # 4. ASU spring registration.
