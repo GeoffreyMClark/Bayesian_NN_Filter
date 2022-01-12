@@ -45,7 +45,7 @@ num_data_collection_episodes = 1  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-data_dir = 'data/inv_pendulum/test15/'
+data_dir = 'data/inv_pendulum/test18/'
 
 gym_env = CartPoleEnvNoise()
 env = suite_gym.wrap_env(gym_env)
@@ -157,14 +157,14 @@ def serialize_array(array):
   return array
 
 def parse_images(prev_state, state, prev_img, img):
-    img_arr = np.asarray(img, dtype=np.uint8)
+    img_arr = np.asarray(img, dtype=np.float16)
     prev_img_arr = np.asarray(prev_img, dtype=np.float16)
     state_arr = np.asarray(state, dtype=np.float64).reshape(-1,10)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
-        "img_height" : _int64_feature(img_arr.shape[-3]),
-        "img_width" : _int64_feature(img_arr.shape[-2]),
-        "img_depth" : _int64_feature(img_arr.shape[-1]),
+        "img_height" : _int64_feature(img_arr.shape[-2]),
+        "img_width" : _int64_feature(img_arr.shape[-1]),
+        # "img_depth" : _int64_feature(img_arr.shape[-1]),
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
         "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
@@ -179,7 +179,7 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
     zero_vec = np.zeros((1,5))
     for i in range(num_episodes):
         time_step = environment.reset()
-        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, '5pendulum')
+        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, '18pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
