@@ -101,7 +101,7 @@ class CartPoleEnvNoise(gym.Env):
         x, x_dot, theta, theta_dot = self.state
         force = self.force_mag if action == 1 else -self.force_mag
         
-        force = -force if np.random.uniform(0,1) >= 0.99999 else force
+        force = -force if np.random.uniform(0,1) >= 0.99999999 else force
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
 

@@ -23,7 +23,7 @@ from cartpole_noise import CartPoleEnvNoise
 
 np.random.seed(2021)
 
-data_dir = 'data/inv_pendulum/test17/'
+data_dir = 'data/inv_pendulum/test19/'
 # data_dir = 'data/stored/'
 
 gym_env = CartPoleEnvNoise()
@@ -62,9 +62,9 @@ def parse_tfr_dynamics(element):
   data = {
       'img_height': tf.io.FixedLenFeature([], tf.int64),
       'img_width':tf.io.FixedLenFeature([], tf.int64),
-    #   'img_depth':tf.io.FixedLenFeature([], tf.int64),
+      'img_depth':tf.io.FixedLenFeature([], tf.int64),
       'raw_image' : tf.io.FixedLenFeature([], tf.string),
-      'prev_raw_image' : tf.io.FixedLenFeature([], tf.string),
+    #   'prev_raw_image' : tf.io.FixedLenFeature([], tf.string),
       'state_size':tf.io.FixedLenFeature([], tf.int64),
       'state' : tf.io.FixedLenFeature([], tf.string),
       'prev_state_size':tf.io.FixedLenFeature([], tf.int64),
@@ -113,9 +113,11 @@ def parse_tfr_observation(element):
   prev_image = tf.io.parse_tensor(prev_raw_image, out_type=tf.float16)
   prev_image = tf.reshape(prev_image, shape=[height,width,1])
 
+  img = tf.concat((image, prev_image), axis=2)
+
   state = tf.io.parse_tensor(raw_state, out_type=tf.float64)
   state = tf.reshape(state, shape=[state_size])
-  return (image, state)
+  return (img, state)
 
 
 def get_observation_dataset(tfr_dir:str=data_dir, pattern:str="*pendulum.tfrecords"):
@@ -146,9 +148,9 @@ def build_dynamics_model(model_name):
 
 def build_observation_model(model_name):
     model = tf.keras.Sequential([
-        layers.Conv2D(64, kernel_size=5, strides=(3,3), padding='valid', activation='relu', input_shape=(75,300,1)),
+        layers.Conv2D(128, kernel_size=5, strides=(3,3), padding='valid', activation='relu', input_shape=(75,300,2)),
         layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu'),
-        layers.Conv2D(64, kernel_size=3, strides=(1,1), padding='valid', activation='relu'),
+        # layers.Conv2D(64, kernel_size=3, strides=(1,1), padding='valid', activation='relu'),
         layers.Flatten(),
         layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform'),
         layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform'),
@@ -183,11 +185,14 @@ def run_model(env, dyn_model):
         img_full=env.render(mode='rgb_array').numpy().reshape(400,600,3)
         video_full.write(img_full)
 
-        img_sliced = cv.pyrDown(img_full[167:317,:,:])
-        video_sliced.write(img_sliced)
+        img_full = cv.pyrDown(img_full[167:317,:,:])
+        gray = cv.cvtColor(img_full, cv.COLOR_BGR2GRAY)
+        img = gray/256
+
+        video_sliced.write(gray)
 
 
-        # obs_pred = obs_model(img.reshape(1,75,300,3))
+        # obs_pred = obs_model(img.reshape(1,75,300,1))
         state_pred = dyn_model(state, training=False)
         action = state_pred.numpy()[0,4]
         if action >=  .5:
@@ -211,9 +216,9 @@ def run_model(env, dyn_model):
     dynamics_mean, dynamics_log_sigma = tf.split(test_dyn, 2, axis=-1)
     dynamics_sigma = np.sqrt(tf.nn.softplus(dynamics_log_sigma))
 
-    obs_mean, obs_log_sigma = tf.split(test_obs, 2, axis=-1)
-    obs_mean=obs_mean.numpy().reshape(-1,5)
-    obs_sigma = np.sqrt(tf.nn.softplus(obs_log_sigma)).reshape(-1,5)
+    # obs_mean, obs_log_sigma = tf.split(test_obs, 2, axis=-1)
+    # obs_mean=obs_mean.numpy().reshape(-1,5)
+    # obs_sigma = np.sqrt(tf.nn.softplus(obs_log_sigma)).reshape(-1,5)
 
 
     plt.figure(10)
@@ -222,8 +227,8 @@ def run_model(env, dyn_model):
         plt.plot(test_state[:,i], color='k')
         plt.plot(dynamics_mean[:,i], color='b')
         plt.fill_between(np.linspace(0,dynamics_mean.shape[0],dynamics_mean.shape[0]), dynamics_mean[:,i]+dynamics_sigma[:,i], dynamics_mean[:,i]-dynamics_sigma[:,i], facecolor='b', alpha=.2)
-        plt.plot(obs_mean[:,i], color='g')
-        plt.fill_between(np.linspace(0,obs_mean.shape[0],obs_mean.shape[0]), obs_mean[:,i]+obs_sigma[:,i], obs_mean[:,i]-obs_sigma[:,i], facecolor='b', alpha=.2)
+        # plt.plot(obs_mean[:,i], color='g')
+        # plt.fill_between(np.linspace(0,obs_mean.shape[0],obs_mean.shape[0]), obs_mean[:,i]+obs_sigma[:,i], obs_mean[:,i]-obs_sigma[:,i], facecolor='b', alpha=.2)
     plt.show()
 
     pass
@@ -250,14 +255,14 @@ if __name__=='__main__':
     # dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=150, verbose=1) #, callbacks=tf_callback)
 
     obs_model_name = 'observation'
-    val_size = 128
+    val_size = 2048
     obs_dataset = get_observation_dataset()
     obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors())
     obs_valid = obs_dataset.take(val_size).batch(val_size)
     # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
     obs_train = obs_dataset.skip(val_size).batch(32).cache().prefetch(tf.data.AUTOTUNE)
     obs_model, tf_callback2 = build_observation_model(obs_model_name)
-    obs_model.fit(obs_train, validation_data=obs_valid, epochs=50, verbose=1) #, callbacks=tf_callback)
+    obs_model.fit(obs_train, validation_data=obs_valid, epochs=80, verbose=1) #, callbacks=tf_callback)
 
 
 
@@ -265,7 +270,7 @@ if __name__=='__main__':
 
 
 
-    run_model(eval_env, dyn_model)
+    # run_model(eval_env, dyn_model)
 
 
 
