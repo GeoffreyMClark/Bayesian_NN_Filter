@@ -69,6 +69,24 @@ def build_observation_model():
     model.load_weights("models/obs2/obs_test2.ckpt")
     return model
 
+def build_timedistributed_observation_model():
+    input_layer = tf.keras.Input(shape=(2,75,300,1))
+
+    encode_1 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=5, strides=(3,3), padding='valid', activation='relu'))(input_layer)
+    encode_2 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu'))(encode_1)
+    encode_3 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=3, strides=(1,1), padding='valid', activation='relu'))(encode_2)
+    flatten_1 = layers.Flatten()(encode_3)
+    deep_1 = layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform')(flatten_1)
+    deep_2 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_1)
+    output_layer = layers.Dense(5*2)(deep_2)
+
+    model = Model(inputs=[input_layer], outputs=[output_layer])
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
+    # model.compile(optimizer='adam', loss=tf.keras.losses.MeanSquaredError())
+    model.summary()
+    model.load_weights("models/obs3/obs_test3.ckpt")
+    return model
 
 def run_model(env, dyn_model, obs_model):
     zero_vec = np.zeros((1,5))
@@ -89,10 +107,10 @@ def run_model(env, dyn_model, obs_model):
             if j == 0:
                 prev_img = img
 
-            obs = np.concatenate((img.reshape(75,300,1), prev_img.reshape(75,300,1)), axis=2)
+            obs = np.concatenate((img.reshape(1,75,300,1), prev_img.reshape(1,75,300,1)), axis=0)
+            obs = obs.reshape(1,2,75,300,1)
 
-
-            obs_pred = obs_model(obs.reshape(1,75,300,2))
+            obs_pred = obs_model(obs, training=False)
             state_pred = dyn_model(state, training=False)
             action = state_pred.numpy()[0,4]
             if action >=  .5:
@@ -143,6 +161,6 @@ def run_model(env, dyn_model, obs_model):
 
 if __name__=='__main__':
     dyn_model = build_dynamics_model()
-    obs_model = build_observation_model()
+    obs_model = build_timedistributed_observation_model()
 
     run_model(eval_env, dyn_model, obs_model)

@@ -13,9 +13,11 @@ import glob
 
 import tensorflow as tf
 import tensorflow_probability as tfp
+import tensorboard
 tfd = tfp.distributions
 from tensorflow import keras
-from tensorflow.keras import layers, Model
+from tensorflow.keras import layers
+from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense
 from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
@@ -23,7 +25,7 @@ from cartpole_noise import CartPoleEnvNoise
 
 np.random.seed(2021)
 
-data_dir = 'data/inv_pendulum/test19/'
+data_dir = 'data/inv_pendulum/test20/'
 # data_dir = 'data/stored/'
 
 gym_env = CartPoleEnvNoise()
@@ -117,6 +119,10 @@ def parse_tfr_observation(element):
 
   state = tf.io.parse_tensor(raw_state, out_type=tf.float64)
   state = tf.reshape(state, shape=[state_size])
+  multiplier = tf.constant([1.0,2.0,1.0,2.0,1.0,1.0,1.0,1.0,1.0,1.0], dtype=tf.float64)
+  state = tf.math.multiply(state, multiplier)
+
+  print(state.shape)
   return (img, state)
 
 
@@ -148,26 +154,51 @@ def build_dynamics_model(model_name):
 
 def build_observation_model(model_name):
     model = tf.keras.Sequential([
-        layers.Conv2D(128, kernel_size=5, strides=(3,3), padding='valid', activation='relu', input_shape=(75,300,2)),
-        layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu'),
-        # layers.Conv2D(64, kernel_size=3, strides=(1,1), padding='valid', activation='relu'),
+        layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu', input_shape=(75,300,2)),
+        # layers.Conv2D(32, kernel_size=4, strides=(2,2), padding='valid', activation='relu'),
+        layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='valid', activation='relu'),
         layers.Flatten(),
+        # layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'),
+        # layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'),
+        layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform'),
         layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform'),
-        layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform'),
         layers.Dense(5*2)
     ])
     model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
     # model.compile(optimizer='adam', loss=tf.keras.losses.MeanSquaredError())
     model.summary()
-    tf_callback = [
-        keras.callbacks.ModelCheckpoint(
-            filepath=model_name + "_{epoch}",
-            save_best_only=True,  # Only save a model if `val_loss` has improved.
-            monitor="val_loss",
-            verbose=0,
-        )
-    ]
+    # tf_callback = [keras.callbacks.ModelCheckpoint(filepath=model_name + "_{epoch}", save_best_only=True, monitor="val_loss", verbose=0)]
+    tf_callback = [keras.callbacks.TensorBoard(log_dir='logs')]
     return model, tf_callback
+
+
+# def build_timedistributed_observation_model(model_name):
+#     input_layer = tf.keras.Input(shape=(2,75,300,1))
+
+#     encode_1 = layers.TimeDistributed(layers.Conv2D(128, kernel_size=5, strides=(3,3), padding='valid', activation='relu'))(input_layer)
+#     # encode_2 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu'))(encode_1)
+#     encode_3 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=3, strides=(1,1), padding='valid', activation='relu'))(encode_1)
+#     flatten_1 = layers.Flatten()(encode_3)
+#     deep_1 = layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform')(flatten_1)
+#     deep_2 = layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_1)
+#     deep_3 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_2)
+#     deep_4 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_3)
+#     output_layer = layers.Dense(5*2)(deep_4)
+
+#     model = Model(inputs=[input_layer], outputs=[output_layer])
+
+#     model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
+#     # model.compile(optimizer='adam', loss=tf.keras.losses.MeanSquaredError())
+#     model.summary()
+#     tf_callback = [
+#         keras.callbacks.ModelCheckpoint(
+#             filepath=model_name + "_{epoch}",
+#             save_best_only=True,  # Only save a model if `val_loss` has improved.
+#             monitor="val_loss",
+#             verbose=0,
+#         )
+#     ]
+#     return model, tf_callback
 
 
 def run_model(env, dyn_model):
@@ -244,6 +275,9 @@ def run_model(env, dyn_model):
 
 if __name__=='__main__':
     # data14 totally works for the dynamics model, can stay up pretty well
+    # test19 observation -1.2
+
+
     # dyn_model_name = 'dynamics'
     # val_size = 2048
     # dyn_dataset = get_dynamics_dataset()
@@ -262,7 +296,7 @@ if __name__=='__main__':
     # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
     obs_train = obs_dataset.skip(val_size).batch(32).cache().prefetch(tf.data.AUTOTUNE)
     obs_model, tf_callback2 = build_observation_model(obs_model_name)
-    obs_model.fit(obs_train, validation_data=obs_valid, epochs=80, verbose=1) #, callbacks=tf_callback)
+    obs_model.fit(obs_train, validation_data=obs_valid, epochs=30, verbose=1, callbacks=tf_callback2)
 
 
 
