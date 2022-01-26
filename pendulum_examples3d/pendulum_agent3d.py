@@ -27,11 +27,7 @@ from tf_agents.trajectories import trajectory
 from tf_agents.specs import tensor_spec
 from tf_agents.utils import common
 
-from cartpole_noise import CartPoleEnvNoise
-
-# tf dataset info from:
-# https://towardsdatascience.com/a-practical-guide-to-tfrecords-584536bc786c
-
+from cartpole_noise3d import InvertedPendulumEnv3DNoise
 
 num_iterations = 200000 # @param {type:"integer"}
 initial_collect_steps = 100  # @param {type:"integer"}
@@ -45,19 +41,26 @@ num_data_collection_episodes = 1  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-data_dir = 'data/inv_pendulum/test18/'
+test_num = '0'
+data_dir = 'data/inv_pendulum/cartpole3d_'+test_num+'/'
 
-gym_env = CartPoleEnvNoise()
-env = suite_gym.wrap_env(gym_env)
-train_py_env = suite_gym.wrap_env(gym_env)
-eval_py_env = suite_gym.wrap_env(gym_env)
+# gym_env = InvertedPendulumEnv3DNoise()
+# env = suite_gym.wrap_env(gym_env)
+# train_py_env = suite_gym.wrap_env(gym_env)
+# eval_py_env = suite_gym.wrap_env(gym_env)
 
-# env_name = 'CartPole-v0'
-# env = suite_gym.load(env_name)
-# train_py_env = suite_gym.load(env_name)
-# eval_py_env = suite_gym.load(env_name)
+gym_env = InvertedPendulumEnv3DNoise()
+test = suite_gym.wrap_env(gym_env)
+env = suite_gym.wrappers.FlattenActionWrapper(test)
+train_py_env = suite_gym.wrappers.FlattenActionWrapper(test)
+eval_py_env = suite_gym.wrappers.FlattenActionWrapper(test)
+
+# suite_gym.wrappers.FlattenActionWrapper
+
 train_env = tf_py_environment.TFPyEnvironment(train_py_env)
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
+
+data_size = env.time_step_spec().observation.shape[0] + env.action_spec().shape[0]
 
 print('Observation Spec:')
 print(env.time_step_spec().observation)
@@ -79,6 +82,8 @@ action = np.array(1, dtype=np.int32)
 next_time_step = env.step(action)
 # print('Next time step:')
 # print(next_time_step)
+
+
 
 
 
@@ -140,8 +145,8 @@ def compute_avg_return(environment, policy, num_episodes=10):
 
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))): # if value ist tensor
-        value = value.numpy() # get value of tensor
+    if isinstance(value, type(tf.constant(0))):
+        value = value.numpy()
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 def _float_feature(value):
@@ -159,12 +164,12 @@ def serialize_array(array):
 def parse_images(prev_state, state, prev_img, img):
     img_arr = np.asarray(img, dtype=np.float16)
     prev_img_arr = np.asarray(prev_img, dtype=np.float16)
-    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,10)
-    prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
+    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,data_size*2)
+    prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,data_size)
     data = {
         "img_height" : _int64_feature(img_arr.shape[-2]),
         "img_width" : _int64_feature(img_arr.shape[-1]),
-        # "img_depth" : _int64_feature(img_arr.shape[-1]),
+        "img_depth" : _int64_feature(img_arr.shape[-3]),
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
         "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
@@ -176,10 +181,10 @@ def parse_images(prev_state, state, prev_img, img):
 
 
 def collect_data(environment, policy, num_episodes=1, starting_shard=1):
-    zero_vec = np.zeros((1,5))
+    zero_vec = np.zeros((1,data_size))
     for i in range(num_episodes):
         time_step = environment.reset()
-        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, '18pendulum')
+        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, test_num+'pendulum3d')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
@@ -196,9 +201,9 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 action=action_step.action.numpy()
                 raw=environment.render(mode='rgb_array')
                 # raw = cv.pyrDown(raw[167:317,:,:])
-                img = raw[167:317,:,:]
                 # gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
                 # img = gray/256
+                img = raw[167:317,:,:]
                 # cv.imshow("full_img", img)
                 # cv.waitKey()
                 if j == 0:
@@ -216,7 +221,6 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 file_writer.write(record_bytes)
 
                 reward = time_step.reward
-                # print(reward)
                 episode_return += reward
             else:
                 break
@@ -257,7 +261,6 @@ def plot_data(iterations, returns):
     plt.plot(iterations, returns)
     plt.ylabel('Average Return')
     plt.xlabel('Iterations')
-    # plt.ylim(top=250)
     plt.show()
 
 
@@ -350,19 +353,3 @@ if __name__=='__main__':
 
     pass
 
-
-# TO DO
-# add batch norm
-# save model and reload in filter file
-# learn dynamics model with action
-# learn vision model with optical flow
-
-
-# 2. add optical flow image to dataset so i can calculate velocities
-# 3. add perturbations to the gym env. Probably want to use sporatic uniformly distributed perturbations centered on zero.
-# 4. ASU spring registration.
-# 5. send personalized instructor evaluation for Dr. Holman
-# 6. tf.data.AUTOTUNE - optimize dataset performance https://www.tensorflow.org/guide/data_performance
-
-# Done
-# 1. finish adding and checking the tf dataset pipeline
