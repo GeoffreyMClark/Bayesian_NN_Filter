@@ -33,24 +33,25 @@ from cartpole_noise import CartPoleEnvNoise
 # https://towardsdatascience.com/a-practical-guide-to-tfrecords-584536bc786c
 
 
-num_iterations = 200000 # @param {type:"integer"}
+num_iterations = 300000 # @param {type:"integer"}
 initial_collect_steps = 100  # @param {type:"integer"}
 collect_steps_per_iteration = 1 # @param {type:"integer"}
 replay_buffer_max_length = 100000  # @param {type:"integer"}
 batch_size = 128  # @param {type:"integer"}
 learning_rate = 1e-4  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
-num_eval_episodes = 50  # @param {type:"integer"}
+num_eval_episodes = 1  # @param {type:"integer"}
 num_data_collection_episodes = 1  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-data_dir = 'data/inv_pendulum/test18/'
+test_num = '00/'
+data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum/test_'+test_num
 
-gym_env = CartPoleEnvNoise()
-env = suite_gym.wrap_env(gym_env)
-train_py_env = suite_gym.wrap_env(gym_env)
-eval_py_env = suite_gym.wrap_env(gym_env)
+# gym_env = CartPoleEnvNoise()
+env = suite_gym.wrap_env(CartPoleEnvNoise(0.8))
+train_py_env = suite_gym.wrap_env(CartPoleEnvNoise(0.8))
+eval_py_env = suite_gym.wrap_env(CartPoleEnvNoise(1.0))
 
 # env_name = 'CartPole-v0'
 # env = suite_gym.load(env_name)
@@ -162,9 +163,9 @@ def parse_images(prev_state, state, prev_img, img):
     state_arr = np.asarray(state, dtype=np.float64).reshape(-1,10)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
-        "img_height" : _int64_feature(img_arr.shape[-2]),
-        "img_width" : _int64_feature(img_arr.shape[-1]),
-        # "img_depth" : _int64_feature(img_arr.shape[-1]),
+        "img_height" : _int64_feature(img_arr.shape[-3]),
+        "img_width" : _int64_feature(img_arr.shape[-2]),
+        "img_depth" : _int64_feature(img_arr.shape[-1]),
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
         "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
@@ -179,7 +180,7 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
     zero_vec = np.zeros((1,5))
     for i in range(num_episodes):
         time_step = environment.reset()
-        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, '18pendulum')
+        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, 'pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
@@ -189,6 +190,7 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
         for j in range(200):
             if not time_step.is_last():
                 prev_action=prev_action_step.action.numpy()
+                prev_action = np.abs(prev_action-1) if np.random.uniform(0,1) >= 0.8 else prev_action
 
                 time_step = environment.step(prev_action_step.action)
                 obs=time_step.observation.numpy()
@@ -196,7 +198,7 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 action=action_step.action.numpy()
                 raw=environment.render(mode='rgb_array')
                 # raw = cv.pyrDown(raw[167:317,:,:])
-                img = raw[167:317,:,:]
+                img = raw[:,167:317,:,:]
                 # gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
                 # img = gray/256
                 # cv.imshow("full_img", img)
@@ -341,7 +343,7 @@ if __name__=='__main__':
             returns.append(avg_return)
             if avg_return >= best_return:
                 best_return = avg_return
-                PolicySaver(agent.policy).save(data_dir)
+                # PolicySaver(agent.policy).save(data_dir)
 
     # collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)
@@ -350,19 +352,3 @@ if __name__=='__main__':
 
     pass
 
-
-# TO DO
-# add batch norm
-# save model and reload in filter file
-# learn dynamics model with action
-# learn vision model with optical flow
-
-
-# 2. add optical flow image to dataset so i can calculate velocities
-# 3. add perturbations to the gym env. Probably want to use sporatic uniformly distributed perturbations centered on zero.
-# 4. ASU spring registration.
-# 5. send personalized instructor evaluation for Dr. Holman
-# 6. tf.data.AUTOTUNE - optimize dataset performance https://www.tensorflow.org/guide/data_performance
-
-# Done
-# 1. finish adding and checking the tf dataset pipeline

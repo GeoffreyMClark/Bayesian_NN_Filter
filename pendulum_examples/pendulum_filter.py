@@ -1,11 +1,11 @@
 from __future__ import absolute_import, division, print_function
 import base64
-import imageio
-import matplotlib
-import matplotlib.pyplot as plt
+# import imageio
+# import matplotlib
+# import matplotlib.pyplot as plt
 import numpy as np
-import PIL.Image
-import reverb
+# import PIL.Image
+# import reverb
 import zlib
 import os
 import cv2 as cv
@@ -19,21 +19,21 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense
-from tf_agents.environments import suite_gym
-from tf_agents.environments import tf_py_environment
-from cartpole_noise import CartPoleEnvNoise
+# from tf_agents.environments import suite_gym
+# from tf_agents.environments import tf_py_environment
+# from cartpole_noise import CartPoleEnvNoise
 
 np.random.seed(2021)
 
-data_dir = 'data/inv_pendulum/test20/'
-# data_dir = 'data/stored/'
+test_num = '00/'
+data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum/test_'+test_num
 
-gym_env = CartPoleEnvNoise()
-env = suite_gym.wrap_env(gym_env)
+# gym_env = CartPoleEnvNoise()
+# env = suite_gym.wrap_env(gym_env)
 
 # env_name = 'CartPole-v0'
 # env = suite_gym.load(env_name)
-eval_env = tf_py_environment.TFPyEnvironment(env)
+# eval_env = tf_py_environment.TFPyEnvironment(env)
 
 class CustomLossNLL(tf.losses.Loss):
     @tf.function
@@ -95,7 +95,7 @@ def parse_tfr_observation(element):
   data = {
       'img_height': tf.io.FixedLenFeature([], tf.int64),
       'img_width':tf.io.FixedLenFeature([], tf.int64),
-    #   'img_depth':tf.io.FixedLenFeature([], tf.int64),
+      'img_depth':tf.io.FixedLenFeature([], tf.int64),
       'raw_image' : tf.io.FixedLenFeature([], tf.string),
       'prev_raw_image' : tf.io.FixedLenFeature([], tf.string),
       'state_size':tf.io.FixedLenFeature([], tf.int64),
@@ -104,25 +104,25 @@ def parse_tfr_observation(element):
   content = tf.io.parse_single_example(element, data)
   height = content['img_height']
   width = content['img_width']
-#   depth = content['img_depth']
+  depth = content['img_depth']
   raw_image = content['raw_image']
   prev_raw_image = content['prev_raw_image']
   state_size = content['state_size']
   raw_state = content['state']
   image = tf.io.parse_tensor(raw_image, out_type=tf.float16)
-  image = tf.reshape(image, shape=[height,width,1])
+  image = tf.image.rgb_to_grayscale(image)
+  image = tf.scalar_mul(1/255, image)
 
   prev_image = tf.io.parse_tensor(prev_raw_image, out_type=tf.float16)
-  prev_image = tf.reshape(prev_image, shape=[height,width,1])
+  prev_image = tf.image.rgb_to_grayscale(prev_image)
+  prev_image = tf.scalar_mul(1/255, prev_image)
 
-  img = tf.concat((image, prev_image), axis=2)
+  img = tf.concat((image, prev_image), 0)
 
   state = tf.io.parse_tensor(raw_state, out_type=tf.float64)
   state = tf.reshape(state, shape=[state_size])
   multiplier = tf.constant([1.0,2.0,1.0,2.0,1.0,1.0,1.0,1.0,1.0,1.0], dtype=tf.float64)
   state = tf.math.multiply(state, multiplier)
-
-  print(state.shape)
   return (img, state)
 
 
@@ -141,128 +141,33 @@ def build_dynamics_model(model_name):
     ])
     model.compile(optimizer='adam', loss=[CustomLossNLL()])
     model.summary()
-    tf_callback = [
-        keras.callbacks.ModelCheckpoint(
-            filepath=model_name + "_{epoch}",
-            save_best_only=True,  # Only save a model if `val_loss` has improved.
-            monitor="val_loss",
-            verbose=0,
-        )
-    ]
-    return model, tf_callback
-
-
-def build_observation_model(model_name):
-    model = tf.keras.Sequential([
-        layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu', input_shape=(75,300,2)),
-        # layers.Conv2D(32, kernel_size=4, strides=(2,2), padding='valid', activation='relu'),
-        layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='valid', activation='relu'),
-        layers.Flatten(),
-        # layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'),
-        # layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'),
-        layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform'),
-        layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform'),
-        layers.Dense(5*2)
-    ])
-    model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
-    # model.compile(optimizer='adam', loss=tf.keras.losses.MeanSquaredError())
-    model.summary()
-    # tf_callback = [keras.callbacks.ModelCheckpoint(filepath=model_name + "_{epoch}", save_best_only=True, monitor="val_loss", verbose=0)]
     tf_callback = [keras.callbacks.TensorBoard(log_dir='logs')]
     return model, tf_callback
 
 
-# def build_timedistributed_observation_model(model_name):
-#     input_layer = tf.keras.Input(shape=(2,75,300,1))
+def build_timedistributed_observation_model(model_name):
+    input_layer = tf.keras.Input(shape=(2,150,600,1))
 
-#     encode_1 = layers.TimeDistributed(layers.Conv2D(128, kernel_size=5, strides=(3,3), padding='valid', activation='relu'))(input_layer)
-#     # encode_2 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=4, strides=(2,2), padding='valid', activation='relu'))(encode_1)
-#     encode_3 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=3, strides=(1,1), padding='valid', activation='relu'))(encode_1)
-#     flatten_1 = layers.Flatten()(encode_3)
-#     deep_1 = layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform')(flatten_1)
-#     deep_2 = layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_1)
-#     deep_3 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_2)
-#     deep_4 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deep_3)
-#     output_layer = layers.Dense(5*2)(deep_4)
+    encode_1 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=5, strides=(3,3), padding='same', activation='relu'))(input_layer)
+    encode_2 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=4, strides=(2,2), padding='same', activation='relu'))(encode_1)
+    encode_3 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='same', activation='relu'))(encode_1)
+    flaten_4 = layers.TimeDistributed(layers.Flatten())(encode_3)
+    deeeep_5 = layers.TimeDistributed(layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform'))(flaten_4)
+    deeeep_6 = layers.TimeDistributed(layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform'))(deeeep_5)
 
-#     model = Model(inputs=[input_layer], outputs=[output_layer])
+    flaten_7 = layers.Flatten()(deeeep_6)
 
-#     model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
-#     # model.compile(optimizer='adam', loss=tf.keras.losses.MeanSquaredError())
-#     model.summary()
-#     tf_callback = [
-#         keras.callbacks.ModelCheckpoint(
-#             filepath=model_name + "_{epoch}",
-#             save_best_only=True,  # Only save a model if `val_loss` has improved.
-#             monitor="val_loss",
-#             verbose=0,
-#         )
-#     ]
-#     return model, tf_callback
+    deeeep_8 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_7)
+    deeeep_9 = layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_8)
+    output_layer = layers.Dense(5*2)(deeeep_9)
 
+    model = Model(inputs=[input_layer], outputs=[output_layer])
 
-def run_model(env, dyn_model):
-    zero_vec = np.zeros((1,5))
-    time_step = env.reset()
-    obs=time_step.observation.numpy()
-    state = np.concatenate((obs, np.array([0]).reshape(1,1)), axis=1)
-    test_state=[]; test_dyn=[]; test_obs=[]
-    video_full = cv.VideoWriter('video_full_3.avi', 0, 30, (600,400))
-    video_sliced = cv.VideoWriter('video_sliced_3.avi', 0, 30, (300,75))
+    model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
+    model.summary()
+    tf_callback = [keras.callbacks.TensorBoard(log_dir='logs')]
+    return model, tf_callback
 
-    while not time_step.is_last():
-    # for i in range(500):
-        # use ground truth state
-        img_full=env.render(mode='rgb_array').numpy().reshape(400,600,3)
-        video_full.write(img_full)
-
-        img_full = cv.pyrDown(img_full[167:317,:,:])
-        gray = cv.cvtColor(img_full, cv.COLOR_BGR2GRAY)
-        img = gray/256
-
-        video_sliced.write(gray)
-
-
-        # obs_pred = obs_model(img.reshape(1,75,300,1))
-        state_pred = dyn_model(state, training=False)
-        action = state_pred.numpy()[0,4]
-        if action >=  .5:
-            action = int(1)
-        elif action < .5:
-            action = int(0)
-        time_step = env.step(action)
-        obs=time_step.observation.numpy()
-        state = np.concatenate((obs, np.array([action]).reshape(1,1)), axis=1)
-
-        test_state.append(state)
-        test_dyn.append(state_pred)
-        # test_obs.append(obs_pred)
-
-    cv.destroyAllWindows()
-    video_full.release()
-    video_sliced.release()
-
-    test_state = np.asarray(test_state).reshape(-1,5)
-    test_dyn = np.asarray(test_dyn).reshape(-1,10)
-    dynamics_mean, dynamics_log_sigma = tf.split(test_dyn, 2, axis=-1)
-    dynamics_sigma = np.sqrt(tf.nn.softplus(dynamics_log_sigma))
-
-    # obs_mean, obs_log_sigma = tf.split(test_obs, 2, axis=-1)
-    # obs_mean=obs_mean.numpy().reshape(-1,5)
-    # obs_sigma = np.sqrt(tf.nn.softplus(obs_log_sigma)).reshape(-1,5)
-
-
-    plt.figure(10)
-    for i in range(5):
-        plt.subplot(5,1,i+1)
-        plt.plot(test_state[:,i], color='k')
-        plt.plot(dynamics_mean[:,i], color='b')
-        plt.fill_between(np.linspace(0,dynamics_mean.shape[0],dynamics_mean.shape[0]), dynamics_mean[:,i]+dynamics_sigma[:,i], dynamics_mean[:,i]-dynamics_sigma[:,i], facecolor='b', alpha=.2)
-        # plt.plot(obs_mean[:,i], color='g')
-        # plt.fill_between(np.linspace(0,obs_mean.shape[0],obs_mean.shape[0]), obs_mean[:,i]+obs_sigma[:,i], obs_mean[:,i]-obs_sigma[:,i], facecolor='b', alpha=.2)
-    plt.show()
-
-    pass
 
 
 
@@ -275,34 +180,33 @@ def run_model(env, dyn_model):
 
 if __name__=='__main__':
     # data14 totally works for the dynamics model, can stay up pretty well
-    # test19 observation -1.2
-
 
     # dyn_model_name = 'dynamics'
     # val_size = 2048
     # dyn_dataset = get_dynamics_dataset()
-    # dyn_dataset = dyn_dataset.apply(tf.data.experimental.ignore_errors())
+    # dyn_dataset = dyn_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=55000)
     # dyn_valid = dyn_dataset.take(val_size).batch(val_size)
     # # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
-    # dyn_train = dyn_dataset.skip(val_size).batch(32).cache().prefetch(tf.data.AUTOTUNE)
+    # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=55000).batch(8).cache().prefetch(tf.data.AUTOTUNE)
     # dyn_model, tf_callback1 = build_dynamics_model(dyn_model_name)
-    # dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=150, verbose=1) #, callbacks=tf_callback)
+    # dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=30, verbose=1, callbacks=tf_callback1)
 
     obs_model_name = 'observation'
     val_size = 2048
     obs_dataset = get_observation_dataset()
-    obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors())
-    obs_valid = obs_dataset.take(val_size).batch(val_size)
+    obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=5000)
+    obs_valid = obs_dataset.take(val_size).batch(8)
     # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
-    obs_train = obs_dataset.skip(val_size).batch(32).cache().prefetch(tf.data.AUTOTUNE)
-    obs_model, tf_callback2 = build_observation_model(obs_model_name)
-    obs_model.fit(obs_train, validation_data=obs_valid, epochs=30, verbose=1, callbacks=tf_callback2)
+    obs_train = obs_dataset.skip(val_size).batch(8).cache().prefetch(tf.data.AUTOTUNE)
+    obs_model, tf_callback2 = build_timedistributed_observation_model(obs_model_name)
+    obs_model.fit(obs_train, validation_data=obs_valid, epochs=80, verbose=1, callbacks=tf_callback2)
 
 
 
 
 
-
+    # for x,y in obs_valid.as_numpy_iterator():
+    #     print(x)
 
     # run_model(eval_env, dyn_model)
 
