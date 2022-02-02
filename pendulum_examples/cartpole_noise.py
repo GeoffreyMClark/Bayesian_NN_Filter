@@ -190,9 +190,9 @@ class CartPoleEnvNoise(gym.Env):
         xinit = self.x_threshold/2
         theta_init = self.theta_threshold_radians/1.2
         pos_x = self.np_random.uniform(low=-xinit, high=xinit, size=(1,))
-        pos_v = self.np_random.uniform(low=-.05, high=.05, size=(1,))
+        pos_v = self.np_random.uniform(low=-1, high=1, size=(1,))
         theta_x = self.np_random.uniform(low=-theta_init, high=theta_init, size=(1,))
-        theta_v = self.np_random.uniform(low=-0.05, high=0.05, size=(1,))
+        theta_v = self.np_random.uniform(low=-0.5, high=0.5, size=(1,))
         self.state = np.concatenate((pos_x, pos_v, theta_x, theta_v))
         self.steps_beyond_done = None
         self.t = 0

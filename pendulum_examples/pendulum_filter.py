@@ -23,9 +23,9 @@ from tensorflow.keras.layers import Dense
 # from tf_agents.environments import tf_py_environment
 # from cartpole_noise import CartPoleEnvNoise
 
-np.random.seed(2021)
+# np.random.seed(2021)
 
-test_num = '00/'
+test_num = '05/'
 data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum/test_'+test_num
 
 # gym_env = CartPoleEnvNoise()
@@ -110,19 +110,19 @@ def parse_tfr_observation(element):
   state_size = content['state_size']
   raw_state = content['state']
   image = tf.io.parse_tensor(raw_image, out_type=tf.float16)
-  image = tf.image.rgb_to_grayscale(image)
-  image = tf.scalar_mul(1/255, image)
+#   image = tf.image.rgb_to_grayscale(image)
+#   image = tf.scalar_mul(1/255, image)
+  image = tf.math.abs(tf.math.subtract(image, 1))
 
   prev_image = tf.io.parse_tensor(prev_raw_image, out_type=tf.float16)
-  prev_image = tf.image.rgb_to_grayscale(prev_image)
-  prev_image = tf.scalar_mul(1/255, prev_image)
+#   prev_image = tf.image.rgb_to_grayscale(prev_image)
+#   prev_image = tf.scalar_mul(1/255, prev_image)
+  prev_image = tf.math.abs(tf.math.subtract(prev_image, 1))
 
   img = tf.concat((image, prev_image), 0)
 
   state = tf.io.parse_tensor(raw_state, out_type=tf.float64)
   state = tf.reshape(state, shape=[state_size])
-  multiplier = tf.constant([1.0,2.0,1.0,2.0,1.0,1.0,1.0,1.0,1.0,1.0], dtype=tf.float64)
-  state = tf.math.multiply(state, multiplier)
   return (img, state)
 
 
@@ -133,7 +133,7 @@ def get_observation_dataset(tfr_dir:str=data_dir, pattern:str="*pendulum.tfrecor
     return pendulum_dataset
 
 
-def build_dynamics_model(model_name):
+def build_dynamics_model():
     model = tf.keras.Sequential([
         layers.Dense(128, activation=tf.nn.relu, input_shape=[5]),
         layers.Dense(64, activation=tf.nn.relu),
@@ -145,27 +145,30 @@ def build_dynamics_model(model_name):
     return model, tf_callback
 
 
-def build_timedistributed_observation_model(model_name):
-    input_layer = tf.keras.Input(shape=(2,150,600,1))
+def build_timedistributed_observation_model():
+    input_layer = tf.keras.Input(shape=(2,75,300,1))
 
-    encode_1 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=5, strides=(3,3), padding='same', activation='relu'))(input_layer)
-    encode_2 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=4, strides=(2,2), padding='same', activation='relu'))(encode_1)
-    encode_3 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='same', activation='relu'))(encode_1)
+    encode_1 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=5, strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))(input_layer)
+    encode_2 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=4, strides=(2,2), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_1)
+    encode_3 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_2)
     flaten_4 = layers.TimeDistributed(layers.Flatten())(encode_3)
     deeeep_5 = layers.TimeDistributed(layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform'))(flaten_4)
-    deeeep_6 = layers.TimeDistributed(layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform'))(deeeep_5)
 
-    flaten_7 = layers.Flatten()(deeeep_6)
+    flaten_6 = layers.Flatten()(deeeep_5)
 
-    deeeep_8 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_7)
+    deeeep_7 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_6)
+    deeeep_8 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_7)
     deeeep_9 = layers.Dense(64, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_8)
-    output_layer = layers.Dense(5*2)(deeeep_9)
+    deeeep_10 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_9)
+    output_layer = layers.Dense(5*2)(deeeep_10)
 
     model = Model(inputs=[input_layer], outputs=[output_layer])
 
     model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
     model.summary()
-    tf_callback = [keras.callbacks.TensorBoard(log_dir='logs')]
+    filepath = '/home/local/ASUAD/gmclark1/Research/data/pendulum/models/test_1/test_1'
+    tf_callback = [tf.keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch',options=None)
+                , keras.callbacks.TensorBoard(log_dir='logs')]
     return model, tf_callback
 
 
@@ -188,19 +191,18 @@ if __name__=='__main__':
     # dyn_valid = dyn_dataset.take(val_size).batch(val_size)
     # # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
     # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=55000).batch(8).cache().prefetch(tf.data.AUTOTUNE)
-    # dyn_model, tf_callback1 = build_dynamics_model(dyn_model_name)
+    # dyn_model, tf_callback1 = build_dynamics_model()
     # dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=30, verbose=1, callbacks=tf_callback1)
 
     obs_model_name = 'observation'
-    val_size = 2048
+    val_size = 16384 #2^14
     obs_dataset = get_observation_dataset()
-    obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=5000)
-    obs_valid = obs_dataset.take(val_size).batch(8)
+    obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=30000)
+    obs_valid = obs_dataset.take(val_size).batch(2048)
     # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
-    obs_train = obs_dataset.skip(val_size).batch(8).cache().prefetch(tf.data.AUTOTUNE)
-    obs_model, tf_callback2 = build_timedistributed_observation_model(obs_model_name)
-    obs_model.fit(obs_train, validation_data=obs_valid, epochs=80, verbose=1, callbacks=tf_callback2)
-
+    obs_train = obs_dataset.skip(val_size).shuffle(buffer_size=30000).batch(32).cache().prefetch(tf.data.AUTOTUNE)
+    obs_model, tf_callback2 = build_timedistributed_observation_model()
+    obs_model.fit(obs_train, validation_data=obs_valid, epochs=110, verbose=1, callbacks=tf_callback2)
 
 
 
@@ -212,5 +214,8 @@ if __name__=='__main__':
 
 
 
+
+ck_path = "models/obs_test4/obs_test4.ckpt"
+obs_model.save_weights(ck_path)
 
 pass
