@@ -15,6 +15,7 @@ from tf_agents.agents.dqn import dqn_agent
 from tf_agents.drivers import py_driver
 from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
+from tf_agents.environments import wrappers
 from tf_agents.eval import metric_utils
 from tf_agents.metrics import tf_metrics
 from tf_agents.networks import sequential
@@ -36,31 +37,29 @@ replay_buffer_max_length = 100000  # @param {type:"integer"}
 batch_size = 128  # @param {type:"integer"}
 learning_rate = 1e-4  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
-num_eval_episodes = 50  # @param {type:"integer"}
+num_eval_episodes = 3  # @param {type:"integer"}
 num_data_collection_episodes = 1  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
+eval_time_threshold = 1000
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-test_num = '0'
-data_dir = 'data/inv_pendulum/cartpole3d_'+test_num+'/'
 
-# gym_env = InvertedPendulumEnv3DNoise()
-# env = suite_gym.wrap_env(gym_env)
-# train_py_env = suite_gym.wrap_env(gym_env)
-# eval_py_env = suite_gym.wrap_env(gym_env)
+test_num = '05'
+data_dir = '/home/geoffrey/Research/data/pendulum3d/test_'+test_num+'/'
 
 gym_env = InvertedPendulumEnv3DNoise()
-test = suite_gym.wrap_env(gym_env)
-env = suite_gym.wrappers.FlattenActionWrapper(test)
-train_py_env = suite_gym.wrappers.FlattenActionWrapper(test)
-eval_py_env = suite_gym.wrappers.FlattenActionWrapper(test)
+# test = suite_gym.wrap_env(gym_env)
+env = suite_gym.wrap_env(gym_env)
+train_py_env = suite_gym.wrap_env(gym_env)
+eval_py_env = suite_gym.wrap_env(gym_env)
 
 # suite_gym.wrappers.FlattenActionWrapper
+# eval_py_env = wrappers.ActionDiscretizeWrapper(test, 20)
 
 train_env = tf_py_environment.TFPyEnvironment(train_py_env)
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-data_size = env.time_step_spec().observation.shape[0] + env.action_spec().shape[0]
+data_size = env.time_step_spec().observation.shape[0] + 1
 
 print('Observation Spec:')
 print(env.time_step_spec().observation)
@@ -75,9 +74,10 @@ time_step = env.reset()
 # print('Time step:')
 # print(time_step)
 
-action = np.array(1, dtype=np.int32)
-# print('Action:')
-# print(action)
+# action = np.array([1], dtype=np.float32)
+action = env.action_space.sample()
+print('Action:')
+print(action)
 
 next_time_step = env.step(action)
 # print('Next time step:')
@@ -131,7 +131,10 @@ def compute_avg_return(environment, policy, num_episodes=10):
   for i in range(num_episodes):
     time_step = environment.reset()
     episode_return = 0.0
-    while not time_step.is_last():
+    # while not time_step.is_last():
+    for _ in range(eval_time_threshold):
+        if time_step.is_last():
+            break
         action_step = policy.action(time_step)
         time_step = environment.step(action_step.action)
         episode_return += time_step.reward
@@ -199,13 +202,14 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 obs=time_step.observation.numpy()
                 action_step = policy.action(time_step)
                 action=action_step.action.numpy()
+                # print((action[0]-10)*(1/10))
                 raw=environment.render(mode='rgb_array')
                 # raw = cv.pyrDown(raw[167:317,:,:])
                 # gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
                 # img = gray/256
-                img = raw[167:317,:,:]
+                img = raw.numpy().reshape(500,500,3)
                 # cv.imshow("full_img", img)
-                # cv.waitKey()
+                # cv.waitKey(1)
                 if j == 0:
                     prev_img = img
 
@@ -344,7 +348,7 @@ if __name__=='__main__':
             returns.append(avg_return)
             if avg_return >= best_return:
                 best_return = avg_return
-                PolicySaver(agent.policy).save(data_dir)
+                # PolicySaver(agent.policy).save(data_dir)
 
     # collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)
@@ -353,3 +357,5 @@ if __name__=='__main__':
 
     pass
 
+# TO DO:
+# 1. add action noise as random sample in collect_data function

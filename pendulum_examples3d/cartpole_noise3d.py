@@ -9,17 +9,13 @@ class InvertedPendulumEnv3DNoise(mujoco_env.MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self)
         mujoco_env.MujocoEnv.__init__(self, "inverted_pendulum.xml", 2)
         register(id='3DCartPole-v2', entry_point='pendulum_examples3d.cartpole_noise3d:InvertedPendulumEnv3DNoise')
-        self.action_max = 10
-        high = np.array(
-            [
-                self.action_max
-            ], dtype=np.float32 )
-
-        self.action_space = spaces.Box(-high, high, dtype=np.float32)
+        self.action_max  = 1
+        self.action_space = spaces.Discrete(10*2)
 
     def step(self, a):
+        action = (a-10)*(1/10)
         reward = 1.0
-        self.do_simulation(a, self.frame_skip)
+        self.do_simulation(action, self.frame_skip)
         ob = self._get_obs()
         notdone = np.isfinite(ob).all() and (np.abs(ob[1]) <= 0.2)
         done = not notdone
