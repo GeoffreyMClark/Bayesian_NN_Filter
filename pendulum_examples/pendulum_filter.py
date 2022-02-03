@@ -25,8 +25,8 @@ from tensorflow.keras.layers import Dense
 
 # np.random.seed(2021)
 
-test_num = '05/'
-data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum/test_'+test_num
+test_num = '14/'
+data_dir = '/home/geoffrey/Research/data/inv_pendulum/test'+test_num
 
 # gym_env = CartPoleEnvNoise()
 # env = suite_gym.wrap_env(gym_env)
@@ -147,7 +147,9 @@ def build_dynamics_model():
     ])
     model.compile(optimizer='adam', loss=[CustomLossNLL()])
     model.summary()
-    tf_callback = [keras.callbacks.TensorBoard(log_dir='logs')]
+    filepath = '/home/geoffrey/Research/data/inv_pendulum/models/dyn0/dyn0'
+    tf_callback = [tf.keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch',options=None)
+                , keras.callbacks.TensorBoard(log_dir='logs')]
     return model, tf_callback
 
 
@@ -172,8 +174,13 @@ def build_timedistributed_observation_model():
 
     model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
     model.summary()
+<<<<<<< HEAD
     filepath = '/home/local/ASUAD/gmclark1/Research/data/pendulum/models/obs4/obs4'
     tf_callback = [tf.keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=False, mode='auto', save_freq='epoch',options=None)
+=======
+    filepath = '/home/geoffrey/Research/data/inv_pendulum/models/test_1/test_1'
+    tf_callback = [tf.keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch',options=None)
+>>>>>>> 0dce4de70898c8ce319cd752c8f7a1f8738d8c58
                 , keras.callbacks.TensorBoard(log_dir='logs')]
     return model, tf_callback
 
@@ -190,6 +197,7 @@ def build_timedistributed_observation_model():
 if __name__=='__main__':
     # data14 totally works for the dynamics model, can stay up pretty well
 
+<<<<<<< HEAD
     # dyn_model_name = 'dynamics'
     # val_size = 16384
     # dyn_dataset = get_dynamics_dataset()
@@ -213,7 +221,33 @@ if __name__=='__main__':
     # ck_path = "models/obs_test4/obs_test4.ckpt"
     # obs_model.save_weights(ck_path)
 
+=======
+    dyn_model_name = 'dynamics'
+    val_size = 2048
+    dyn_dataset = get_dynamics_dataset()
+    dyn_dataset = dyn_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=55000)
+    dyn_valid = dyn_dataset.take(val_size).batch(val_size)
+    # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
+    dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=55000).batch(8).cache().prefetch(tf.data.AUTOTUNE)
+    dyn_model, tf_callback1 = build_dynamics_model()
+    dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=100, verbose=1, callbacks=tf_callback1)
 
+    dyn_model_path = "/home/local/ASUAD/gmclark1/Research/data/pendulum/models/dyn0/dyn0.ckpt"
+    dyn_model.save_weights(dyn_model_path)
+
+    # obs_model_name = 'observation'
+    # val_size = 16384 #2^14
+    # obs_dataset = get_observation_dataset()
+    # obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=30000)
+    # obs_valid = obs_dataset.take(val_size).batch(2048)
+    # # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
+    # obs_train = obs_dataset.skip(val_size).shuffle(buffer_size=30000).batch(32).cache().prefetch(tf.data.AUTOTUNE)
+    # obs_model, tf_callback2 = build_timedistributed_observation_model()
+    # obs_model.fit(obs_train, validation_data=obs_valid, epochs=110, verbose=1, callbacks=tf_callback2)
+>>>>>>> 0dce4de70898c8ce319cd752c8f7a1f8738d8c58
+
+    # ck_path = "models/obs_test4/obs_test4.ckpt"
+    # obs_model.save_weights(ck_path)
 
 
 
@@ -225,5 +259,9 @@ if __name__=='__main__':
 
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0dce4de70898c8ce319cd752c8f7a1f8738d8c58
 
 pass
