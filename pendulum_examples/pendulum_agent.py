@@ -27,13 +27,14 @@ from tf_agents.trajectories import trajectory
 from tf_agents.specs import tensor_spec
 from tf_agents.utils import common
 
-from cartpole_noise import CartPoleEnvNoise
+from cartpole_high import CartPoleEnvNoise
 
 # tf dataset info from:
 # https://towardsdatascience.com/a-practical-guide-to-tfrecords-584536bc786c
 
 
-num_iterations = 300000 # @param {type:"integer"}
+
+num_iterations = 500000 # @param {type:"integer"}
 initial_collect_steps = 100  # @param {type:"integer"}
 collect_steps_per_iteration = 1 # @param {type:"integer"}
 replay_buffer_max_length = 100000  # @param {type:"integer"}
@@ -45,13 +46,14 @@ num_data_collection_episodes = 1  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-test_num = '05/'
-data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum/test_'+test_num
+test_num = '00/'
+data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/test_'+test_num
+model_dir ='/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/ctrl2/'
 
 # gym_env = CartPoleEnvNoise()
-env = suite_gym.wrap_env(CartPoleEnvNoise(0.8))
-train_py_env = suite_gym.wrap_env(CartPoleEnvNoise(0.8))
-eval_py_env = suite_gym.wrap_env(CartPoleEnvNoise(1.0))
+env = suite_gym.wrap_env(CartPoleEnvNoise(0.95, 2))
+train_py_env = suite_gym.wrap_env(CartPoleEnvNoise(0.95, 2))
+eval_py_env = suite_gym.wrap_env(CartPoleEnvNoise(1.0, 2))
 
 # env_name = 'CartPole-v0'
 # env = suite_gym.load(env_name)
@@ -187,12 +189,15 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
         episode_return = 0
 
         # while not time_step.is_last():
-        for j in range(100):
+        for j in range(500):
             if not time_step.is_last():
                 prev_action=prev_action_step.action.numpy()
-                prev_action = np.abs(prev_action-1) if np.random.uniform(0,1) >= 0.499999999 else prev_action
+                action_noise = np.random.normal(0,5)
+                new_action = np.clip(prev_action+action_noise, 0, 20).astype(int)
+                prev_action = new_action if np.random.uniform(0,1) >= 0.8 else prev_action
+                print(prev_action)
 
-                time_step = environment.step(prev_action_step.action)
+                time_step = environment.step(prev_action)
                 obs=time_step.observation.numpy()
                 action_step = policy.action(time_step)
                 action=action_step.action.numpy()
@@ -207,25 +212,25 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                     prev_img = img
                 else:
 
-                    prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
-                    state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
+                    # prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
+                    # state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
 
-                    flip_prev_state = prev_state*-1
-                    flip_state = state*-1
-                    flip_img = cv.flip(img, 1)
-                    flip_prev_img = cv.flip(prev_img, 1)
+                    # flip_prev_state = prev_state*-1
+                    # flip_state = np.concatenate(((state[0,0:4]*-1).reshape(1,4), (((state[0,4]-10)*-1)+10).reshape(1,1), zero_vec ), axis=1)
+                    # flip_img = cv.flip(img, 1)
+                    # flip_prev_img = cv.flip(prev_img, 1)
 
-                    # cv.imshow("full_img", flip_img-flip_prev_img)
-                    # cv.waitKey(100)
+                    # # cv.imshow("full_img", flip_img-flip_prev_img)
+                    # # cv.waitKey(100)
 
-                    data = parse_images(prev_state, state, prev_img.reshape(1,75,300,1), img.reshape(1,75,300,1))
-                    flip_data = parse_images(flip_prev_state, flip_state, flip_prev_img.reshape(1,75,300,1), flip_img.reshape(1,75,300,1))
+                    # data = parse_images(prev_state, state, prev_img.reshape(1,75,300,1), img.reshape(1,75,300,1))
+                    # flip_data = parse_images(flip_prev_state, flip_state, flip_prev_img.reshape(1,75,300,1), flip_img.reshape(1,75,300,1))
 
-                    record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
-                    file_writer.write(record_bytes)
+                    # record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+                    # file_writer.write(record_bytes)
 
-                    flip_record_bytes = tf.train.Example(features=tf.train.Features(feature=flip_data)).SerializeToString()
-                    file_writer.write(flip_record_bytes)
+                    # flip_record_bytes = tf.train.Example(features=tf.train.Features(feature=flip_data)).SerializeToString()
+                    # file_writer.write(flip_record_bytes)
 
 
                     prev_obs = obs
@@ -333,7 +338,7 @@ if __name__=='__main__':
 
     eval_num=1
 
-    collect_data(eval_env, agent.policy, 5000)
+    # collect_data(eval_env, agent.policy, 100, starting_shard=i*100+1)
 
     for _ in range(num_iterations):
 
@@ -357,7 +362,7 @@ if __name__=='__main__':
             returns.append(avg_return)
             if avg_return >= best_return:
                 best_return = avg_return
-                # PolicySaver(agent.policy).save(data_dir)
+                PolicySaver(agent.policy).save(model_dir)
 
     # collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)

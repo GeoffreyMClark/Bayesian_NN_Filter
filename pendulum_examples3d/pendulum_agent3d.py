@@ -44,8 +44,8 @@ eval_time_threshold = 1000
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
 
-test_num = '05'
-data_dir = '/home/geoffrey/Research/data/pendulum3d/test_'+test_num+'/'
+test_num = '00'
+data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum3d/test_'+test_num+'/'
 
 gym_env = InvertedPendulumEnv3DNoise()
 # test = suite_gym.wrap_env(gym_env)
@@ -193,6 +193,10 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
         prev_action_step = policy.action(time_step)
         episode_return = 0
 
+        if starting_shard==30:
+            savename = 'Pendulum3d'
+            video_full = cv.VideoWriter(savename+'.avi', 0, 30, (500,500))
+
         # while not time_step.is_last():
         for j in range(200):
             if not time_step.is_last():
@@ -204,14 +208,20 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 action=action_step.action.numpy()
                 # print((action[0]-10)*(1/10))
                 raw=environment.render(mode='rgb_array')
+
+                
+                
                 # raw = cv.pyrDown(raw[167:317,:,:])
                 # gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
                 # img = gray/256
                 img = raw.numpy().reshape(500,500,3)
-                # cv.imshow("full_img", img)
-                # cv.waitKey(1)
+                cv.imshow("full_img", img)
+                cv.waitKey(1)
                 if j == 0:
                     prev_img = img
+
+                if starting_shard==30:
+                    video_full.write(img)
 
                 prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
                 state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
@@ -228,6 +238,10 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 episode_return += reward
             else:
                 break
+
+        if starting_shard==30:
+            cv.destroyAllWindows()
+            video_full.release()
         file_writer.close()
         print("episode return = ", episode_return)
 

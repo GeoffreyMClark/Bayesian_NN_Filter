@@ -20,16 +20,18 @@ from tensorflow.keras import layers, Model, models
 from tensorflow.keras.layers import Dense
 from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
-from cartpole_noise import CartPoleEnvNoise
+# from cartpole_noise import CartPoleEnvNoise
+from cartpole_high import CartPoleEnvNoise
 
 
 
-gym_env = CartPoleEnvNoise(1.0)
-env = suite_gym.wrap_env(gym_env)
+# gym_env = CartPoleEnvNoise(1.0)
+gym_env = suite_gym.wrap_env(CartPoleEnvNoise(1.0, 2))
+# env = suite_gym.wrap_env(gym_env)
 
 # env_name = 'CartPole-v0'
 # env = suite_gym.load(env_name)
-eval_env = tf_py_environment.TFPyEnvironment(env)
+eval_env = tf_py_environment.TFPyEnvironment(gym_env)
 
 
 class CustomLossNLL(tf.losses.Loss):
@@ -43,41 +45,41 @@ class CustomLossNLL(tf.losses.Loss):
         return loss
 
 
-def build_dynamics_model():
-    model = tf.keras.Sequential([
-        layers.Dense(128, activation=tf.nn.relu, input_shape=[5]),
-        layers.Dense(64, activation=tf.nn.relu),
-        layers.Dense(5*2)
-    ])
-    model.compile(optimizer='adam', loss=[CustomLossNLL()])
-    model.summary()
-    model.load_weights("/home/geoffrey/Research/data/inv_pendulum/models/dyn0/dyn0")
-    return model
+# def build_dynamics_model():
+#     model = tf.keras.Sequential([
+#         layers.Dense(128, activation=tf.nn.relu, input_shape=[5]),
+#         layers.Dense(64, activation=tf.nn.relu),
+#         layers.Dense(5*2)
+#     ])
+#     model.compile(optimizer='adam', loss=[CustomLossNLL()])
+#     model.summary()
+#     model.load_weights("/home/local/ASUAD/gmclark1/Research/data/pendulum/models/dyn0/dyn0")
+#     return model
 
 
-def build_timedistributed_observation_model():
-    input_layer = tf.keras.Input(shape=(2,75,300,1))
+# def build_timedistributed_observation_model():
+#     input_layer = tf.keras.Input(shape=(2,75,300,1))
 
-    encode_1 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=5, strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))(input_layer)
-    encode_2 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=4, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_1)
-    encode_3 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_2)
-    flaten_4 = layers.TimeDistributed(layers.Flatten())(encode_3)
-    deeeep_5 = layers.TimeDistributed(layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'))(flaten_4)
+#     encode_1 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=5, strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))(input_layer)
+#     encode_2 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=4, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_1)
+#     encode_3 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_2)
+#     flaten_4 = layers.TimeDistributed(layers.Flatten())(encode_3)
+#     deeeep_5 = layers.TimeDistributed(layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'))(flaten_4)
 
-    flaten_6 = layers.Flatten()(deeeep_5)
+#     flaten_6 = layers.Flatten()(deeeep_5)
 
-    deeeep_7 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_6)
-    deeeep_8 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_7)
-    deeeep_9 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_8)
-    deeeep_10 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_9)
-    output_layer = layers.Dense(5*2)(deeeep_10)
+#     deeeep_7 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_6)
+#     deeeep_8 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_7)
+#     deeeep_9 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_8)
+#     deeeep_10 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_9)
+#     output_layer = layers.Dense(5*2)(deeeep_10)
 
-    model = Model(inputs=[input_layer], outputs=[output_layer])
+#     model = Model(inputs=[input_layer], outputs=[output_layer])
 
-    model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
-    model.summary()
-    model.load_weights("/home/geoffrey/Research/data/inv_pendulum/models/obs3/obs3")
-    return model
+#     model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
+#     model.summary()
+#     model.load_weights("/home/geoffrey/Research/data/inv_pendulum/models/obs3/obs3")
+#     return model
 
 def run_models(env, dyn_model, obs_model):
     zero_vec = np.zeros((1,5))
@@ -150,9 +152,9 @@ def run_models(env, dyn_model, obs_model):
 
 
 
-def run_filter(env, dyn_model, obs_model):
-    savename = 'Pendulum_nonoise'
-    video_full = cv.VideoWriter(savename+'.avi', 0, 30, (600,400))
+def run_filter(env, dyn_model, obs_model, saved_policy):
+    savename = 'Pendulum_specklenoise'
+    video_full = cv.VideoWriter(savename+'.avi', 0, 30, (600,400), 0)
 
     time_step = env.reset()
     state = np.concatenate((time_step.observation.numpy(), np.array([0]).reshape(1,1), np.zeros([1,5])), axis=1)
@@ -166,7 +168,7 @@ def run_filter(env, dyn_model, obs_model):
             gray = cv.cvtColor(img_full, cv.COLOR_BGR2GRAY).reshape(400,600,1)
 
             # speckle noise
-            # gauss = np.random.normal(0,.1,gray.size)
+            # gauss = np.random.normal(0,.5,gray.size)
             # gauss = gauss.reshape(gray.shape[0],gray.shape[1], gray.shape[2]).astype('uint8')
             # noise = gray + gray * gauss
 
@@ -188,6 +190,10 @@ def run_filter(env, dyn_model, obs_model):
 
             cut = cv.pyrDown(noise[167:317,:,:])
             img = np.abs((cut/255)-1)
+
+            cv.imshow("full_img", cut)
+            cv.waitKey(500)
+
             if j == 0:
                 prev_img = img
             obs = np.concatenate((img.reshape(1,75,300,1), prev_img.reshape(1,75,300,1)), axis=0)
@@ -208,13 +214,16 @@ def run_filter(env, dyn_model, obs_model):
 
             cycle_state = np.concatenate((cycle_state, new_state), axis=0)
 
-            action = state_pred.numpy()[0,4]
-            if action >=  .5:
-                action = int(1)
-            elif action < .5:
-                action = int(0)
-            elif np.isnan(action):
-                action = int(0)
+            
+
+            # action = state_pred.numpy()[0,4]
+            # action = np.clip(action, 0, 20).astype(int)
+            # if action >=  .5:
+            #     action = int(1)
+            # elif action < .5:
+            #     action = int(0)
+            # elif np.isnan(action):
+            #     action = int(0)
             print(action)
             time_step = env.step(action)
             state = np.concatenate((time_step.observation.numpy(), np.array([action]).reshape(1,1), np.zeros([1,5])), axis=1)
@@ -277,10 +286,13 @@ def run_filter(env, dyn_model, obs_model):
 
 
 if __name__=='__main__':
-    dyn_model = build_dynamics_model()
+    # control model
+    ctrl_model = tf.compat.v2.saved_model.load('/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/ctrl0')
+    # dyn_model = build_dynamics_model()
+    dyn_model = models.load_model('/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/dyn0', custom_objects={'CustomLossNLL': CustomLossNLL()})
     # obs_model = build_timedistributed_observation_model()
-    obs_model = models.load_model('/home/geoffrey/Research/data/inv_pendulum/models/obs3/obs3', custom_objects={'CustomLossNLL': CustomLossNLL()})
+    obs_model = models.load_model('/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/obs0', custom_objects={'CustomLossNLL': CustomLossNLL()})
 
     # run_models(eval_env, dyn_model, obs_model)
 
-    run_filter(eval_env, dyn_model, obs_model)
+    run_filter(eval_env, dyn_model, obs_model, ctrl_model)
