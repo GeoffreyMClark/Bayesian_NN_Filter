@@ -287,11 +287,11 @@ def run_filter(env, dyn_model, obs_model, saved_policy):
 
 if __name__=='__main__':
     # control model
-    ctrl_model = tf.compat.v2.saved_model.load('/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/ctrl0')
+    ctrl_model = tf.compat.v2.saved_model.load('/home/geoffrey/Research/data/pendulum_high/models/ctrl0')
     # dyn_model = build_dynamics_model()
-    dyn_model = models.load_model('/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/dyn0', custom_objects={'CustomLossNLL': CustomLossNLL()})
+    dyn_model = models.load_model('/home/geoffrey/Research/data/pendulum_high/models/dyn0', custom_objects={'CustomLossNLL': CustomLossNLL()})
     # obs_model = build_timedistributed_observation_model()
-    obs_model = models.load_model('/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/obs0', custom_objects={'CustomLossNLL': CustomLossNLL()})
+    obs_model = models.load_model('/home/geoffrey/Research/data/pendulum_high/models/obs0', custom_objects={'CustomLossNLL': CustomLossNLL()})
 
     # run_models(eval_env, dyn_model, obs_model)
 

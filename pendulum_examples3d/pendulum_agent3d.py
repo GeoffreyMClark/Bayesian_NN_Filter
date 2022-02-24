@@ -338,7 +338,7 @@ if __name__=='__main__':
 
     eval_num=1
 
-    # collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
+    collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
 
     for _ in range(num_iterations):
 
