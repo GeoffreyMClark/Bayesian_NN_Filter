@@ -42,11 +42,11 @@ batch_size = 128  # @param {type:"integer"}
 learning_rate = 1e-4  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
 num_eval_episodes = 1  # @param {type:"integer"}
-num_data_collection_episodes = 1  # @param {type:"integer"}
+num_data_collection_episodes = 20  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-test_num = '00/'
+test_num = '05/'
 data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/test_'+test_num
 model_dir ='/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/ctrl2/'
 
@@ -162,7 +162,7 @@ def serialize_array(array):
 def parse_images(prev_state, state, prev_img, img):
     img_arr = np.asarray(img, dtype=np.float16)
     prev_img_arr = np.asarray(prev_img, dtype=np.float16)
-    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,10)
+    state_arr = np.asarray(state, dtype=np.float64).reshape(-1,5)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
         "img_height" : _int64_feature(img_arr.shape[-3]),
@@ -178,7 +178,7 @@ def parse_images(prev_state, state, prev_img, img):
     return data
 
 
-def collect_data(environment, policy, num_episodes=1, starting_shard=1):
+def collect_data(environment, policy, num_episodes=10, starting_shard=1):
     zero_vec = np.zeros((1,5))
     for i in range(num_episodes):
         time_step = environment.reset()
@@ -205,39 +205,26 @@ def collect_data(environment, policy, num_episodes=1, starting_shard=1):
                 cut = cv.pyrDown(raw.reshape(400,600,3)[167:317,:,:])
                 # img = raw[:,167:317,:,:]
                 gray = cv.cvtColor(cut, cv.COLOR_BGR2GRAY)
-                img = (gray/256)
+                img_0 = (gray/255)
                 # cv.imshow("full_img", img)
                 # cv.waitKey()
                 if j == 0:
-                    prev_img = img
+                    img_1 = img_0
                 else:
 
-                    # prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
-                    # state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
+                    prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
+                    state = np.concatenate((obs, action.reshape(1,1)), axis=1)
+                    data = parse_images(prev_state, state, img_1.reshape(1,75,300,1), img_0.reshape(1,75,300,1))
 
-                    # flip_prev_state = prev_state*-1
-                    # flip_state = np.concatenate(((state[0,0:4]*-1).reshape(1,4), (((state[0,4]-10)*-1)+10).reshape(1,1), zero_vec ), axis=1)
-                    # flip_img = cv.flip(img, 1)
-                    # flip_prev_img = cv.flip(prev_img, 1)
-
-                    # # cv.imshow("full_img", flip_img-flip_prev_img)
-                    # # cv.waitKey(100)
-
-                    # data = parse_images(prev_state, state, prev_img.reshape(1,75,300,1), img.reshape(1,75,300,1))
-                    # flip_data = parse_images(flip_prev_state, flip_state, flip_prev_img.reshape(1,75,300,1), flip_img.reshape(1,75,300,1))
-
-                    # record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
-                    # file_writer.write(record_bytes)
-
-                    # flip_record_bytes = tf.train.Example(features=tf.train.Features(feature=flip_data)).SerializeToString()
-                    # file_writer.write(flip_record_bytes)
+                    record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+                    file_writer.write(record_bytes)
 
 
                     prev_obs = obs
                     prev_action_step = action_step
-                    prev_img = img
+                    # img_2 = img_1
+                    img_1 = img_0
                     reward = time_step.reward
-                    # print(reward)
                     episode_return += 1
             else:
                 break
@@ -293,52 +280,53 @@ def plot_data(iterations, returns):
 
 
 if __name__=='__main__':
-    q_net = create_model(env)
-    agent = create_agent(train_env, q_net)
-    replay_buffer, rb_observer = create_replay(agent)
+    for i in range(1):
+        q_net = create_model(env)
+        agent = create_agent(train_env, q_net)
+        replay_buffer, rb_observer = create_replay(agent)
 
-    example_environment = tf_py_environment.TFPyEnvironment(suite_gym.load('CartPole-v0'))
-    time_step = example_environment.reset()
-    random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(),train_env.action_spec())
+        example_environment = tf_py_environment.TFPyEnvironment(suite_gym.load('CartPole-v0'))
+        time_step = example_environment.reset()
+        random_policy = random_tf_policy.RandomTFPolicy(train_env.time_step_spec(),train_env.action_spec())
 
-    py_driver.PyDriver(
-        env,
-        py_tf_eager_policy.PyTFEagerPolicy(random_policy, use_tf_function=True),
-        [rb_observer],
-        max_steps=initial_collect_steps).run(train_py_env.reset())
+        py_driver.PyDriver(
+            env,
+            py_tf_eager_policy.PyTFEagerPolicy(random_policy, use_tf_function=True),
+            [rb_observer],
+            max_steps=initial_collect_steps).run(train_py_env.reset())
 
-    dataset = replay_buffer.as_dataset(
-        num_parallel_calls=3,
-        sample_batch_size=batch_size,
-        num_steps=2).prefetch(3)
-    iterator = iter(dataset)
+        dataset = replay_buffer.as_dataset(
+            num_parallel_calls=3,
+            sample_batch_size=batch_size,
+            num_steps=2).prefetch(3)
+        iterator = iter(dataset)
 
-    # (Optional) Optimize by wrapping some of the code in a graph using TF function.
-    agent.train = common.function(agent.train)
+        # (Optional) Optimize by wrapping some of the code in a graph using TF function.
+        agent.train = common.function(agent.train)
 
-    # Reset the train step.
-    agent.train_step_counter.assign(0)
+        # Reset the train step.
+        agent.train_step_counter.assign(0)
 
-    # Evaluate the agent's policy once before training.
-    avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
-    returns = [avg_return]
-    best_return = avg_return
-    # collect_data(eval_env, agent.policy, num_data_collection_episodes)
+        # Evaluate the agent's policy once before training.
+        avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
+        returns = [avg_return]
+        best_return = avg_return
+        # collect_data(eval_env, agent.policy, num_data_collection_episodes)
 
-    # Reset the environment.
-    time_step = train_py_env.reset()
+        # Reset the environment.
+        time_step = train_py_env.reset()
 
-    # Create a driver to collect experience.
-    collect_driver = py_driver.PyDriver(
-        env,
-        py_tf_eager_policy.PyTFEagerPolicy(
-        agent.collect_policy, use_tf_function=True),
-        [rb_observer],
-        max_steps=collect_steps_per_iteration)
+        # Create a driver to collect experience.
+        collect_driver = py_driver.PyDriver(
+            env,
+            py_tf_eager_policy.PyTFEagerPolicy(
+            agent.collect_policy, use_tf_function=True),
+            [rb_observer],
+            max_steps=collect_steps_per_iteration)
 
-    eval_num=1
+        eval_num=1
 
-    # collect_data(eval_env, agent.policy, 100, starting_shard=i*100+1)
+        collect_data(eval_env, agent.policy, num_data_collection_episodes, starting_shard=(i)*num_data_collection_episodes+1)
 
     for _ in range(num_iterations):
 
@@ -357,12 +345,12 @@ if __name__=='__main__':
         if step % eval_interval == 0:
             avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
             collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
-            eval_num +=1
+            eval_num +=num_data_collection_episodes
             print('step = {0}: Average Return = {1}'.format(step, avg_return))
             returns.append(avg_return)
             if avg_return >= best_return:
                 best_return = avg_return
-                PolicySaver(agent.policy).save(model_dir)
+                # PolicySaver(agent.policy).save(model_dir)
 
     # collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)

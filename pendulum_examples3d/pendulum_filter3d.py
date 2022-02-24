@@ -25,8 +25,8 @@ from cartpole_noise3d import InvertedPendulumEnv3DNoise
 
 np.random.seed(2021)
 
-test_num = '05'
-data_dir = '/home/geoffrey/Research/data/pendulum3d/test_'+test_num+'/'
+test_num = '00'
+data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum3d/test_'+test_num+'/'
 
 
 class CustomLossNLL(tf.losses.Loss):

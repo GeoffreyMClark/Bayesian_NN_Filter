@@ -38,7 +38,7 @@ batch_size = 128  # @param {type:"integer"}
 learning_rate = 1e-4  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
 num_eval_episodes = 3  # @param {type:"integer"}
-num_data_collection_episodes = 1  # @param {type:"integer"}
+num_data_collection_episodes = 20  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 eval_time_threshold = 1000
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
@@ -170,9 +170,9 @@ def parse_images(prev_state, state, prev_img, img):
     state_arr = np.asarray(state, dtype=np.float64).reshape(-1,data_size*2)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,data_size)
     data = {
-        "img_height" : _int64_feature(img_arr.shape[-2]),
-        "img_width" : _int64_feature(img_arr.shape[-1]),
-        "img_depth" : _int64_feature(img_arr.shape[-3]),
+        "img_height" : _int64_feature(img_arr.shape[-3]),
+        "img_width" : _int64_feature(img_arr.shape[-2]),
+        "img_depth" : _int64_feature(img_arr.shape[-1]),
         "raw_image" : _bytes_feature(serialize_array(img_arr)),
         "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
@@ -183,65 +183,148 @@ def parse_images(prev_state, state, prev_img, img):
     return data
 
 
-def collect_data(environment, policy, num_episodes=1, starting_shard=1):
-    zero_vec = np.zeros((1,data_size))
+# def collect_data(environment, policy, num_episodes=1, starting_shard=1):
+#     zero_vec = np.zeros((1,data_size))
+#     for i in range(num_episodes):
+#         time_step = environment.reset()
+#         current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, test_num+'pendulum3d')
+#         file_writer = tf.io.TFRecordWriter(current_shard_name)
+#         prev_obs = time_step.observation.numpy()
+#         prev_action_step = policy.action(time_step)
+#         episode_return = 0
+
+#         if starting_shard==30:
+#             savename = 'Pendulum3d'
+#             video_full = cv.VideoWriter(savename+'.avi', 0, 30, (500,500))
+
+#         # while not time_step.is_last():
+#         for j in range(200):
+#             if not time_step.is_last():
+#                 prev_action=prev_action_step.action.numpy()
+
+#                 time_step = environment.step(prev_action_step.action)
+#                 obs=time_step.observation.numpy()
+#                 action_step = policy.action(time_step)
+#                 action=action_step.action.numpy()
+#                 # print((action[0]-10)*(1/10))
+#                 raw=environment.render(mode='rgb_array')
+
+                
+                
+#                 # raw = cv.pyrDown(raw[167:317,:,:])
+#                 # gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
+#                 # img = gray/256
+#                 img = raw.numpy().reshape(500,500,3)[50:280,:,:]
+#                 cv.imshow("full_img", img)
+#                 cv.waitKey(100)
+
+#                 if j == 0:
+#                     prev_img = img
+
+#                 if starting_shard==30:
+#                     video_full.write(img)
+
+#                 prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
+#                 state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
+#                 data = parse_images(prev_state, state, prev_img, img)
+
+#                 prev_obs = obs
+#                 prev_action_step = action_step
+#                 prev_img = img
+
+#                 record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+#                 file_writer.write(record_bytes)
+
+#                 reward = time_step.reward
+#                 episode_return += reward
+#             else:
+#                 break
+
+#         if starting_shard==30:
+#             cv.destroyAllWindows()
+#             video_full.release()
+#         file_writer.close()
+#         print("episode return = ", episode_return)
+
+
+
+
+
+def collect_data(environment, policy, num_episodes=10, starting_shard=1):
+    zero_vec = np.zeros((1,5))
     for i in range(num_episodes):
         time_step = environment.reset()
-        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, test_num+'pendulum3d')
+        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, 'pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
         episode_return = 0
 
-        if starting_shard==30:
-            savename = 'Pendulum3d'
-            video_full = cv.VideoWriter(savename+'.avi', 0, 30, (500,500))
-
         # while not time_step.is_last():
-        for j in range(200):
+        for j in range(500):
             if not time_step.is_last():
                 prev_action=prev_action_step.action.numpy()
+                action_noise = np.random.normal(0,5)
+                new_action = np.clip(prev_action+action_noise, 0, 20).astype(int)
+                prev_action = new_action if np.random.uniform(0,1) >= 0.8 else prev_action
+                print(prev_action)
 
-                time_step = environment.step(prev_action_step.action)
+                time_step = environment.step(prev_action)
                 obs=time_step.observation.numpy()
                 action_step = policy.action(time_step)
                 action=action_step.action.numpy()
-                # print((action[0]-10)*(1/10))
-                raw=environment.render(mode='rgb_array')
+                raw=environment.render(mode='rgb_array').numpy()
+                img = raw.reshape(500,500,3)[:,:,:]
 
-                
-                
-                # raw = cv.pyrDown(raw[167:317,:,:])
-                # gray = cv.cvtColor(raw, cv.COLOR_BGR2GRAY)
-                # img = gray/256
-                img = raw.numpy().reshape(500,500,3)
-                cv.imshow("full_img", img)
+                # speckle noise
+                gauss = np.random.normal(0,1,img.size)
+                gauss = gauss.reshape(img.shape[0],img.shape[1], img.shape[2]).astype('uint8')
+                noise1 = img + img * gauss
+                cv.imwrite('noise1.png', noise1)
+
+                # speckle subtractive noise
+                gauss = np.random.normal(0,1,img.size)
+                gauss = gauss.reshape(img.shape[0],img.shape[1], img.shape[2]).astype('uint8')
+                noise2 = cv.add(img,gauss).reshape(500,500,3)
+                cv.imwrite('noise2.png', noise2)
+
+                # Gaussian Blur
+                noise3 = cv.GaussianBlur(img.reshape(500,500,3), (7,7), 0).reshape(500,500,3)
+                cv.imwrite('noise3.png', noise3)
+
+                # speckle black noise
+                gauss = np.random.normal(0,1,img[:,:,1].size)
+                gauss = gauss.reshape(img.shape[0],img.shape[1]).astype('uint8')
+                gauss = np.concatenate((gauss.reshape(500,500,1), gauss.reshape(500,500,1), gauss.reshape(500,500,1)), axis=2)
+                noise4 = img + img * gauss
+                cv.imwrite('noise4.png', noise4)
+
+                cv.imwrite('true.png', img)
+
+
+                cv.imshow("full_img", noise3)
                 cv.waitKey(1)
+
                 if j == 0:
                     prev_img = img
+                else:
 
-                if starting_shard==30:
-                    video_full.write(img)
+                    # prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
+                    # state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
 
-                prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
-                state = np.concatenate((obs, action.reshape(1,1), zero_vec), axis=1)
-                data = parse_images(prev_state, state, prev_img, img)
+                    # data = parse_images(prev_state, state, prev_img.reshape(1,230,500,3), img.reshape(1,230,500,3))
 
-                prev_obs = obs
-                prev_action_step = action_step
-                prev_img = img
+                    # record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+                    # file_writer.write(record_bytes)
 
-                record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
-                file_writer.write(record_bytes)
-
-                reward = time_step.reward
-                episode_return += reward
+                    prev_obs = obs
+                    prev_action_step = action_step
+                    prev_img = img
+                    reward = time_step.reward
+                    # print(reward)
+                    episode_return += 1
             else:
                 break
-
-        if starting_shard==30:
-            cv.destroyAllWindows()
-            video_full.release()
         file_writer.close()
         print("episode return = ", episode_return)
 
@@ -293,6 +376,7 @@ def plot_data(iterations, returns):
 
 
 if __name__=='__main__':
+    # for j in range(1000):
     q_net = create_model(env)
     agent = create_agent(train_env, q_net)
     replay_buffer, rb_observer = create_replay(agent)
@@ -338,7 +422,7 @@ if __name__=='__main__':
 
     eval_num=1
 
-    # collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
+    # collect_data(eval_env, agent.policy, 10, starting_shard=j*10+1)
 
     for _ in range(num_iterations):
 

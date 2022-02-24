@@ -27,6 +27,7 @@ from tensorflow.keras.layers import Dense
 
 test_num = '0*/'
 data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/test_'+test_num
+valid_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/valid/'
 
 # gym_env = CartPoleEnvNoise()
 # env = suite_gym.wrap_env(gym_env)
@@ -65,14 +66,14 @@ def parse_tfr_dynamics(element):
   raw_state = content['state']
   raw_prev_state = content['prev_state']
   state = tf.io.parse_tensor(raw_state, out_type=tf.float64)
-  state = tf.reshape(state, shape=[state_size])
+  state = tf.reshape(state[0:5], shape=[5])
   prev_state = tf.io.parse_tensor(raw_prev_state, out_type=tf.float64)
   prev_state = tf.reshape(prev_state, shape=[prev_state_size])
 
-  multiplier = tf.constant([1,1,1,1,0,1,1,1,1,1], dtype=tf.float64)
+  multiplier = tf.constant([1,1,1,1,0], dtype=tf.float64)
   state = tf.math.multiply(state, multiplier)
 
-  adder = tf.constant([0,0,0,0,.5,0,0,0,0,0], dtype=tf.float64)
+  adder = tf.constant([0,0,0,0,.5], dtype=tf.float64)
   state = tf.math.add(state, adder)
 
   return (prev_state, state)
@@ -118,10 +119,10 @@ def parse_tfr_observation(element):
   state = tf.io.parse_tensor(raw_state, out_type=tf.float64)
   state = tf.reshape(state, shape=[state_size])
 
-  multiplier = tf.constant([1,1,1,1,0,1,1,1,1,1], dtype=tf.float64)
+  multiplier = tf.constant([1,1,1,1,0], dtype=tf.float64)
   state = tf.math.multiply(state, multiplier)
 
-  adder = tf.constant([0,0,0,0,.5,0,0,0,0,0], dtype=tf.float64)
+  adder = tf.constant([0,0,0,0,.5], dtype=tf.float64)
   state = tf.math.add(state, adder)
   return (img, state)
 
@@ -151,69 +152,64 @@ def build_dynamics_model():
 def build_timedistributed_observation_model():
     input_layer = tf.keras.Input(shape=(2,75,300,1))
 
-    encode_1 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=10, strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))(input_layer)
-    encode_2 = layers.TimeDistributed(layers.Conv2D(64, kernel_size=4, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_1)
-    encode_3 = layers.TimeDistributed(layers.Conv2D(32, kernel_size=3, strides=(1,1), padding='same', activation='relu', kernel_initializer='he_uniform', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)))(encode_2)
-    flaten_4 = layers.TimeDistributed(layers.Flatten())(encode_3)
-    deeeep_5 = layers.TimeDistributed(layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform'))(flaten_4)
+    encode_1 = layers.TimeDistributed(layers.Conv2D(8, kernel_size=5, strides=(3,3), padding='same', activation='relu', kernel_initializer='he_uniform'))(input_layer)
+    encode_2 = layers.TimeDistributed(layers.Conv2D(8, kernel_size=4, strides=(2,1), padding='same', activation='relu', kernel_initializer='he_uniform'))(encode_1)
+    encode_3 = layers.TimeDistributed(layers.Conv2D(8, kernel_size=3, strides=(2,1), padding='same', activation='relu', kernel_initializer='he_uniform'))(encode_2) #, kernel_regularizer=tf.keras.regularizers.l2(l=0.01)
+    flaten = layers.TimeDistributed(layers.Flatten())(encode_3)
+    deeeep_5 = layers.TimeDistributed(layers.Dense(2048, activation=tf.nn.relu, kernel_initializer='he_uniform'))(flaten)
+    # deeeep_6 = layers.TimeDistributed(layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform'))(deeeep_5)
 
-    flaten_6 = layers.Flatten()(deeeep_5)
+    flaten_7 = layers.Flatten()(deeeep_5)
 
-    deeeep_7 = layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_6)
-    deeeep_8 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_7)
-    deeeep_9 = layers.Dense(128, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_8)
+    deeeep_8 = layers.Dense(1024, activation=tf.nn.relu, kernel_initializer='he_uniform')(flaten_7)
+    deeeep_9 = layers.Dense(256, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_8)
     deeeep_10 = layers.Dense(32, activation=tf.nn.relu, kernel_initializer='he_uniform')(deeeep_9)
-    output_layer = layers.Dense(5*2)(deeeep_10)
+    output_layer = layers.Dense(5)(deeeep_10)
 
     model = Model(inputs=[input_layer], outputs=[output_layer])
 
-    model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss= [CustomLossNLL()])
+    model.compile(optimizer=tf.keras.optimizers.Adam(0.0001), loss=[tf.keras.losses.MeanSquaredError(), tf.keras.losses.MeanAbsoluteError()])
     model.summary()
-    filepath = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/obs0'
+    filepath = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/fullobs5'
     tf_callback = [tf.keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, save_weights_only=False, mode='auto', save_freq='epoch',options=None)
                 , keras.callbacks.TensorBoard(log_dir='logs')]
     return model, tf_callback
 
 
 
+# dyn_dataset = get_dynamics_dataset()
+# dyn_dataset = dyn_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=100000)
+# dyn_valid = dyn_dataset.take(val_size).batch(val_size)
+# # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
+# dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=100000).batch(32).cache().prefetch(tf.data.AUTOTUNE)
+# dyn_model, tf_callback1 = build_dynamics_model()
+# dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=200, verbose=1, callbacks=tf_callback1)
+
+# dyn_model_path = "/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/dyn0/dyn0.ckpt"
+# dyn_model.save_weights(dyn_model_path)
 
 
 
-if __name__=='__main__':
-    # data14 totally works for the dynamics model, can stay up pretty well
+obs_model_name = 'observation'
+val_dataset = get_observation_dataset(tfr_dir=valid_dir)
+val_dataset = val_dataset.apply(tf.data.experimental.ignore_errors())
+obs_valid = val_dataset.batch(1024)
 
-    # dyn_model_name = 'dynamics'
-    # val_size = 16384
-    # dyn_dataset = get_dynamics_dataset()
-    # dyn_dataset = dyn_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=100000)
-    # dyn_valid = dyn_dataset.take(val_size).batch(val_size)
-    # # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
-    # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=100000).batch(32).cache().prefetch(tf.data.AUTOTUNE)
-    # dyn_model, tf_callback1 = build_dynamics_model()
-    # dyn_model.fit(dyn_train, validation_data=dyn_valid, epochs=200, verbose=1, callbacks=tf_callback1)
+obs_dataset = get_observation_dataset()
+obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors())
+obs_train = obs_dataset.shuffle(buffer_size=10000).batch(32).cache().prefetch(tf.data.AUTOTUNE)
+obs_model, tf_callback2 = build_timedistributed_observation_model()
+obs_model.fit(obs_train, validation_data=obs_valid, epochs=300, verbose=1, callbacks=tf_callback2)
 
-    # dyn_model_path = "/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/dyn0/dyn0.ckpt"
-    # dyn_model.save_weights(dyn_model_path)
-
-    obs_model_name = 'observation'
-    val_size = 16384 #2^14
-    obs_dataset = get_observation_dataset()
-    obs_dataset = obs_dataset.apply(tf.data.experimental.ignore_errors()).shuffle(buffer_size=30000)
-    obs_valid = obs_dataset.take(val_size).batch(1024)
-    # dyn_train = dyn_dataset.skip(val_size).shuffle(buffer_size=22000).batch(256).prefetch(tf.data.AUTOTUNE)
-    obs_train = obs_dataset.skip(val_size).shuffle(buffer_size=30000).batch(32).prefetch(tf.data.AUTOTUNE)
-    obs_model, tf_callback2 = build_timedistributed_observation_model()
-    obs_model.fit(obs_train, validation_data=obs_valid, epochs=200, verbose=1, callbacks=tf_callback2)
-
-    # ck_path = "models/obs_test4/obs_test4.ckpt"
-    # obs_model.save_weights(ck_path)
+# ck_path = "models/obs_test4/obs_test4.ckpt"
+# obs_model.save_weights(ck_path)
 
 
 
-    # for x,y in obs_valid.as_numpy_iterator():
-    #     print(x)
+# for x,y in obs_valid.as_numpy_iterator():
+#     print(x)
 
-    # run_model(eval_env, dyn_model)
+# run_model(eval_env, dyn_model)
 
 
 
