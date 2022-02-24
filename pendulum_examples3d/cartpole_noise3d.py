@@ -7,10 +7,10 @@ from gym.envs.registration import register
 class InvertedPendulumEnv3DNoise(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
         utils.EzPickle.__init__(self)
-        mujoco_env.MujocoEnv.__init__(self, "inverted_pendulum.xml", 2)
+        mujoco_env.MujocoEnv.__init__(self, "/home/local/ASUAD/gmclark1/Research/git/Bayesian_NN_Filter/pendulum_examples3d/inverted_pendulum_back.xml", 2)
         register(id='3DCartPole-v2', entry_point='pendulum_examples3d.cartpole_noise3d:InvertedPendulumEnv3DNoise')
         self.action_max  = 1
-        self.action_space = spaces.Discrete(10*2)
+        self.action_space = spaces.Discrete(20)
 
     def step(self, a):
         action = (a-10)*(1/10)
@@ -22,12 +22,8 @@ class InvertedPendulumEnv3DNoise(mujoco_env.MujocoEnv, utils.EzPickle):
         return ob, reward, done, {}
 
     def reset_model(self):
-        qpos = self.init_qpos + self.np_random.uniform(
-            size=self.model.nq, low=-0.01, high=0.01
-        )
-        qvel = self.init_qvel + self.np_random.uniform(
-            size=self.model.nv, low=-0.01, high=0.01
-        )
+        qpos = self.init_qpos + self.np_random.uniform(size=self.model.nq, low=-0.01, high=0.01)
+        qvel = self.init_qvel + self.np_random.uniform(size=self.model.nv, low=-0.01, high=0.01)
         self.set_state(qpos, qvel)
         return self._get_obs()
 
@@ -36,5 +32,7 @@ class InvertedPendulumEnv3DNoise(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         v = self.viewer
-        v.cam.trackbodyid = 0
+        v.cam.trackbodyid = 1
         v.cam.distance = self.model.stat.extent
+        v.cam.elevation = -10
+        pass

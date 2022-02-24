@@ -194,10 +194,10 @@ class CartPoleEnvNoise(gym.Env):
         return np.array(self.state, dtype=np.float32), reward, done, {}
 
     def reset(self):
-        xinit = self.x_threshold/2
+        xinit = self.x_threshold/1
         theta_init = self.theta_threshold_radians/1.0
         pos_x = self.np_random.uniform(low=-xinit, high=xinit, size=(1,))
-        pos_v = self.np_random.uniform(low=-.01, high=.01, size=(1,))
+        pos_v = self.np_random.uniform(low=-.1, high=.1, size=(1,))
         theta_x = self.np_random.uniform(low=-theta_init, high=theta_init, size=(1,))
         theta_v = self.np_random.uniform(low=-0.05, high=0.05, size=(1,))
         self.state = np.concatenate((pos_x, pos_v, theta_x, theta_v))
