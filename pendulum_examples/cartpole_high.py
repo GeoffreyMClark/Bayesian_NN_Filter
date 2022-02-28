@@ -62,6 +62,7 @@ class CartPoleEnvNoise(gym.Env):
         self.kinematics_integrator = "euler"
         self.noise = noise
         self.variance = variance
+        self.past_action = 10
 
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
@@ -161,7 +162,13 @@ class CartPoleEnvNoise(gym.Env):
         )
 
         # reward = np.clip(1-np.log(x**2), -10, 100)
-        reward = 0.5-(np.abs(force)/3)**2
+        # reward = 0.5-(np.abs(force)/3)**2
+        if self.t == 0:
+            reward = 1
+            self.past_action = action
+        else:
+            reward = 1 - np.abs((action-self.past_action))/10
+            self.past_action = action
 
         # if not done:
             # reward = x**2 + (theta)**2
@@ -194,12 +201,21 @@ class CartPoleEnvNoise(gym.Env):
         return np.array(self.state, dtype=np.float32), reward, done, {}
 
     def reset(self):
+        # xinit = self.x_threshold/1
+        # theta_init = self.theta_threshold_radians/1.0
+        # pos_x = self.np_random.uniform(low=-xinit, high=xinit, size=(1,))
+        # pos_v = self.np_random.uniform(low=-.1, high=.1, size=(1,))
+        # theta_x = self.np_random.uniform(low=-theta_init, high=theta_init, size=(1,))
+        # theta_v = self.np_random.uniform(low=-0.06, high=0.06, size=(1,))
+        # self.state = np.concatenate((pos_x, pos_v, theta_x, theta_v))
+        # self.steps_beyond_done = None
+        # self.t = 0
         xinit = self.x_threshold/1
-        theta_init = self.theta_threshold_radians/1.0
-        pos_x = self.np_random.uniform(low=-xinit, high=xinit, size=(1,))
-        pos_v = self.np_random.uniform(low=-.1, high=.1, size=(1,))
-        theta_x = self.np_random.uniform(low=-theta_init, high=theta_init, size=(1,))
-        theta_v = self.np_random.uniform(low=-0.05, high=0.05, size=(1,))
+        theta_init = self.theta_threshold_radians/2.0
+        pos_x = np.array([-xinit])
+        pos_v = np.array([.1])
+        theta_x = np.array([.15])
+        theta_v = np.array([.2])
         self.state = np.concatenate((pos_x, pos_v, theta_x, theta_v))
         self.steps_beyond_done = None
         self.t = 0

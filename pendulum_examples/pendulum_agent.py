@@ -34,7 +34,7 @@ from cartpole_high import CartPoleEnvNoise
 
 
 
-num_iterations = 500000 # @param {type:"integer"}
+num_iterations = 1000000 # @param {type:"integer"}
 initial_collect_steps = 100  # @param {type:"integer"}
 collect_steps_per_iteration = 1 # @param {type:"integer"}
 replay_buffer_max_length = 100000  # @param {type:"integer"}
@@ -42,17 +42,18 @@ batch_size = 128  # @param {type:"integer"}
 learning_rate = 1e-4  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
 num_eval_episodes = 1  # @param {type:"integer"}
-num_data_collection_episodes = 20  # @param {type:"integer"}
+num_data_collection_episodes = 5  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 fc_layer_params = (512, 512, 256, 256) #NN layer sizes
 
-test_num = '05/'
-data_dir = '/home/local/ASUAD/gmclark1/Research/data/pendulum_high/test_'+test_num
-model_dir ='/home/local/ASUAD/gmclark1/Research/data/pendulum_high/models/ctrl2/'
+test_num = '04/'
+data_dir = '/home/geoffrey/Research/data/pendulum_high/test_'+test_num
+model_dir ='/home/geoffrey/Research/data/pendulum_high/models/ctrl1/'
+valid_dir = '/home/geoffrey/Research/data/pendulum_high/valid4/'
 
 # gym_env = CartPoleEnvNoise()
-env = suite_gym.wrap_env(CartPoleEnvNoise(0.95, 2))
-train_py_env = suite_gym.wrap_env(CartPoleEnvNoise(0.95, 2))
+env = suite_gym.wrap_env(CartPoleEnvNoise(0.95, 3))
+train_py_env = suite_gym.wrap_env(CartPoleEnvNoise(0.95, 3))
 eval_py_env = suite_gym.wrap_env(CartPoleEnvNoise(1.0, 2))
 
 # env_name = 'CartPole-v0'
@@ -159,17 +160,18 @@ def serialize_array(array):
   array = tf.io.serialize_tensor(array)
   return array
 
-def parse_images(prev_state, state, prev_img, img):
-    img_arr = np.asarray(img, dtype=np.float16)
-    prev_img_arr = np.asarray(prev_img, dtype=np.float16)
+# def parse_images(prev_state, state, prev_img, img):
+def parse_images(prev_state, state):
+    # img_arr = np.asarray(img, dtype=np.float16)
+    # prev_img_arr = np.asarray(prev_img, dtype=np.float16)
     state_arr = np.asarray(state, dtype=np.float64).reshape(-1,5)
     prev_state_arr = np.asarray(prev_state, dtype=np.float64).reshape(-1,5)
     data = {
-        "img_height" : _int64_feature(img_arr.shape[-3]),
-        "img_width" : _int64_feature(img_arr.shape[-2]),
-        "img_depth" : _int64_feature(img_arr.shape[-1]),
-        "raw_image" : _bytes_feature(serialize_array(img_arr)),
-        "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
+        # "img_height" : _int64_feature(img_arr.shape[-3]),
+        # "img_width" : _int64_feature(img_arr.shape[-2]),
+        # "img_depth" : _int64_feature(img_arr.shape[-1]),
+        # "raw_image" : _bytes_feature(serialize_array(img_arr)),
+        # "prev_raw_image" : _bytes_feature(serialize_array(prev_img_arr)),
         "state_size" : _int64_feature(state_arr.shape[-1]),
         "state": _bytes_feature(serialize_array(state_arr)),
         "prev_state_size" : _int64_feature(prev_state_arr.shape[-1]),
@@ -177,12 +179,25 @@ def parse_images(prev_state, state, prev_img, img):
     }
     return data
 
+def wrap(action):
+    if action > 20:
+        wrap_action = action-20
+    elif action < 0:
+        wrap_action = action+20
+    else:
+        wrap_action = action
+    return wrap_action
+
 
 def collect_data(environment, policy, num_episodes=10, starting_shard=1):
     zero_vec = np.zeros((1,5))
+    step_count = []
     for i in range(num_episodes):
+        if i < 20:
+            current_shard_name = "{}{}_{}{}.tfrecords".format(valid_dir, i+starting_shard, num_episodes, 'pendulum')
+        else:
+            current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, 'pendulum')
         time_step = environment.reset()
-        current_shard_name = "{}{}_{}{}.tfrecords".format(data_dir, i+starting_shard, num_episodes, 'pendulum')
         file_writer = tf.io.TFRecordWriter(current_shard_name)
         prev_obs = time_step.observation.numpy()
         prev_action_step = policy.action(time_step)
@@ -192,44 +207,57 @@ def collect_data(environment, policy, num_episodes=10, starting_shard=1):
         for j in range(500):
             if not time_step.is_last():
                 prev_action=prev_action_step.action.numpy()
-                action_noise = np.random.normal(0,5)
-                new_action = np.clip(prev_action+action_noise, 0, 20).astype(int)
-                prev_action = new_action if np.random.uniform(0,1) >= 0.8 else prev_action
-                print(prev_action)
+                action_noise = np.random.normal(0,4)
+                # new_action = np.clip(prev_action+action_noise, 0, 20).astype(int)
+                new_action = wrap(prev_action+action_noise).astype(int)
+                prev_action = new_action if np.random.uniform(0,1) >= 1.0 else prev_action
+                # print(prev_action)
 
                 time_step = environment.step(prev_action)
                 obs=time_step.observation.numpy()
                 action_step = policy.action(time_step)
                 action=action_step.action.numpy()
-                raw=environment.render(mode='rgb_array').numpy()
-                cut = cv.pyrDown(raw.reshape(400,600,3)[167:317,:,:])
+                # raw=environment.render(mode='rgb_array').numpy()
+                environment.render()
+                # cut = cv.pyrDown(raw.reshape(400,600,3)[167:317,:,:])
                 # img = raw[:,167:317,:,:]
-                gray = cv.cvtColor(cut, cv.COLOR_BGR2GRAY)
-                img_0 = (gray/255)
+                # gray = cv.cvtColor(cut, cv.COLOR_BGR2GRAY)
+                # img_0 = (gray/255)
                 # cv.imshow("full_img", img)
                 # cv.waitKey()
-                if j == 0:
-                    img_1 = img_0
-                else:
+                # if j == 0:
+                #     img_1 = img_0
+                # else:
 
-                    prev_state = np.concatenate((prev_obs, prev_action.reshape(1,1)), axis=1)
-                    state = np.concatenate((obs, action.reshape(1,1)), axis=1)
-                    data = parse_images(prev_state, state, img_1.reshape(1,75,300,1), img_0.reshape(1,75,300,1))
+                # prev_state = np.concatenate((prev_obs, ((prev_action-10)*.1).reshape(1,1)), axis=1)
+                # state = np.concatenate((obs, ((action-10)*.1).reshape(1,1)), axis=1)
+                # # data = parse_images(prev_state, state, img_1.reshape(1,75,300,1), img_0.reshape(1,75,300,1))
+                # data = parse_images(prev_state, state)
+                # record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
+                # file_writer.write(record_bytes)
 
-                    record_bytes = tf.train.Example(features=tf.train.Features(feature=data)).SerializeToString()
-                    file_writer.write(record_bytes)
+                # flip_prev = np.concatenate((prev_obs*-1, ((prev_action-10)*-.1).reshape(1,1)), axis=1)
+                # flip_state = np.concatenate((obs*-1, ((action-10)*-.1).reshape(1,1)), axis=1)
+                # flip_data = parse_images(flip_prev, flip_state)
+                # flip_record_bytes = tf.train.Example(features=tf.train.Features(feature=flip_data)).SerializeToString()
+                # file_writer.write(flip_record_bytes)
+
+                
 
 
-                    prev_obs = obs
-                    prev_action_step = action_step
-                    # img_2 = img_1
-                    img_1 = img_0
-                    reward = time_step.reward
-                    episode_return += 1
+                prev_obs = obs
+                prev_action_step = action_step
+                # img_2 = img_1
+                # img_1 = img_0
+                reward = time_step.reward
+                episode_return += 1
             else:
                 break
         file_writer.close()
-        print("episode return = ", episode_return)
+        # print("episode return = ", episode_return)
+        step_count.append(episode_return)
+    # print('Mean Return - ',np.mean(np.asarray(step_count)))
+    return np.mean(np.asarray(step_count))
 
 
 
@@ -326,7 +354,7 @@ if __name__=='__main__':
 
         eval_num=1
 
-        collect_data(eval_env, agent.policy, num_data_collection_episodes, starting_shard=(i)*num_data_collection_episodes+1)
+        # collect_data(eval_env, agent.policy, num_data_collection_episodes, starting_shard=(i)*num_data_collection_episodes+1)
 
     for _ in range(num_iterations):
 
@@ -343,14 +371,14 @@ if __name__=='__main__':
             print('step = {0}: loss = {1}'.format(step, train_loss))
 
         if step % eval_interval == 0:
-            avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
-            collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
+            # avg_return = compute_avg_return(eval_env, agent.policy, num_eval_episodes)
+            avg_return = collect_data(eval_env, agent.policy, num_data_collection_episodes, eval_num)
             eval_num +=num_data_collection_episodes
             print('step = {0}: Average Return = {1}'.format(step, avg_return))
             returns.append(avg_return)
             if avg_return >= best_return:
                 best_return = avg_return
-                # PolicySaver(agent.policy).save(model_dir)
+                PolicySaver(agent.policy).save(model_dir)
 
     # collect_data(eval_env, agent.policy, num_data_collection_episodes)
     iterations = range(0, num_iterations + 1, eval_interval)
